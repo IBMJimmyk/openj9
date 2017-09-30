@@ -78,7 +78,7 @@
 #define OPT_SIMD_DETAILS "O^O AUTO SIMD: "
 
 #define INVALID_STRIDE INT_MAX
-#define VECTOR_SIZE 16
+#define VECTOR_SIZE 32
 #define INVALID_ADDR  (TR::Node *)-1
 
 namespace TR { class OptimizationManager; }
@@ -1242,18 +1242,18 @@ bool TR_SPMDKernelParallelizer::reductionLoopExitProcessing(TR::Compilation *com
    switch (scalarDataType)
       {
       case TR::Int8:
-         numelements = 16;
+         numelements = VECTOR_SIZE;
          break;
       case TR::Int16:
-         numelements = 8;
+         numelements = VECTOR_SIZE/2;
          break;
       case TR::Int32:
       case TR::Float:
-         numelements = 4;
+         numelements = VECTOR_SIZE/4;
          break;
       case TR::Int64:
       case TR::Double:
-         numelements = 2;
+         numelements = VECTOR_SIZE/8;
          break;
       default:
          if (trace) traceMsg(comp, "   reductionLoopExitProcessing: Unknown vector data type during transformation phase.\n");
