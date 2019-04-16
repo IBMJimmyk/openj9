@@ -21,6 +21,7 @@
  *******************************************************************************/
 
 #include <string.h>
+#include <assert.h>
 
 #include "bcvcfr.h"
 #include "bcverify.h"
@@ -891,8 +892,10 @@ mergeStacks (J9BytecodeVerificationData * verifyData, UDATA target)
 
 		/* Target location does not have a stack, so give the target our current stack */
 		copyStack(liveStack, targetStack);
+                assert(verifyData->unwalkedQueueTail <= verifyData->rootQueueSize);
 		verifyData->unwalkedQueue[verifyData->unwalkedQueueTail++] = target;
 		verifyData->unwalkedQueueTail %= (verifyData->rootQueueSize / sizeof(UDATA));
+                assert(verifyData->unwalkedQueueTail <= verifyData->rootQueueSize);
 		bytecodeMap[target] |= BRANCH_ON_UNWALKED_QUEUE;
 		Trc_BCV_mergeStacks_CopyStack(verifyData->vmStruct,
 				(UDATA) J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(verifyData->romClass)),
@@ -1343,6 +1346,7 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 
 	verifyData->unwalkedQueueHead = 0;
 	verifyData->unwalkedQueueTail = 0;
+        assert(verifyData->unwalkedQueueTail <= verifyData->rootQueueSize);
 	verifyData->rewalkQueueHead = 0;
 	verifyData->rewalkQueueTail = 0;
 
@@ -1363,6 +1367,7 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 	constantPool = J9_ROM_CP_FROM_ROM_CLASS(romClass);
 
 	while (pc < length) {
+                assert(verifyData->unwalkedQueueTail <= verifyData->rootQueueSize);
 		if ((UDATA) (stackTop - stackBase) > maxStack) {
 			errorType = J9NLS_BCV_ERR_STACK_OVERFLOW__ID;
 			verboseErrorCode = BCV_ERR_STACK_OVERFLOW;
@@ -1417,6 +1422,7 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 			stackTop = originalStackTop;
 		}
 
+                assert(verifyData->unwalkedQueueTail <= verifyData->rootQueueSize);
 		start = (IDATA) pc;
 
 		/* Merge all branchTargets encountered */	
@@ -1432,6 +1438,7 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 			}
 		}
 		justLoadedStack = FALSE;
+                assert(verifyData->unwalkedQueueTail <= verifyData->rootQueueSize);
 		
 		bcIndex = code + pc;
 		bc = *bcIndex;
@@ -1464,6 +1471,8 @@ simulateStack (J9BytecodeVerificationData * verifyData)
 		type2 = (type1 >> 4) & 0xF;
 		type1 = (UDATA) decodeTable[type1 & 0xF];
 		type2 = (UDATA) decodeTable[type2];
+
+                assert(verifyData->unwalkedQueueTail <= verifyData->rootQueueSize);
 
 		switch (action) {
 		case RTV_NOP:
@@ -2099,6 +2108,7 @@ allocateVerifyBuffers (J9PortLibrary * portLib, J9BytecodeVerificationData *veri
 	verifyData->rewalkQueueHead = 0;
 	verifyData->rewalkQueueTail = 0;
 	verifyData->rootQueueSize = ROOT_QUEUE_DEFAULT_SIZE;
+        assert(verifyData->unwalkedQueueTail <= verifyData->rootQueueSize);
 
 	verifyData->liveStack = bcvalloc (verifyData, (UDATA) LIVE_STACK_DEFAULT_SIZE);
 	verifyData->liveStackSize = LIVE_STACK_DEFAULT_SIZE;
