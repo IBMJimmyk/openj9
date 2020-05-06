@@ -1133,18 +1133,25 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
    TR::Node* rootNode;
 
    //checking the number of bytes
-   while ( !((currentNode->getFirstChild() == ibloadNode) && (currentNode->getOpCodeValue() == TR::bu2i)) )
+   while (!((currentNode->getFirstChild() == ibloadNode) && (currentNode->getOpCodeValue() == TR::bu2i)))
       {
-      if ( (currentNode->getOpCodeValue() == TR::iadd) || (currentNode->getOpCodeValue() == TR::ior))
+      if ((currentNode->getOpCodeValue() == TR::iadd) || (currentNode->getOpCodeValue() == TR::ior))
          {
          numBytes++;
          if (numBytes==1)
+            {
             rootNode=prevNode;
+            }
          }
       else if (isValidSeqLoadIMul(comp, currentNode))
+         {
          numBytes++;
+         }
       else
+         {
          numBytes = 0;
+         }
+
       prevNode = currentNode;
       currentNode = currentNode->getFirstChild();
       }
@@ -1222,7 +1229,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
          {
          if ( !(isValidSeqLoadIMul(comp, currentNode)) )
             return currentTreeTop;
-         if ( !(shiftVar*multiplier==getMultValueForSeqLoad(comp, rootNode, numBytes, numBytes - i)) )
+         if ( !(shiftVar*multiplier==getMultValueForSeqLoad(comp, rootNode, numBytes, numBytes - i)) )  //This check is broken for numBytes == 2 since multiplier is 0 instead of 256.
             return currentTreeTop;
          if ( !(baseOffset == getOffsetForSeqLoad(comp, rootNode, numBytes, numBytes - i) + i)
             || !(aloadNode == getALoadReferenceForSeqLoad(rootNode, numBytes, numBytes - i))
@@ -2390,33 +2397,30 @@ int32_t TR_SequentialStoreSimplifier::perform()
 
    TR::TreeTop* currentTree = comp()->getStartTree();
    TR::TreeTop* prevTree = NULL;
-   TR::Block *curBlock = comp()->getCurrentBlock();
 
    vcount_t visitCount1 = comp()->incOrResetVisitCount();
 
    while (currentTree)
       {
       TR::Node *firstNodeInTree = currentTree->getNode();
-      if (firstNodeInTree->getOpCodeValue() == TR::BBStart)
-         curBlock = firstNodeInTree->getBlock();
 
+      if (firstNodeInTree->getOpCode().isStore() && firstNodeInTree->getOpCode().isIndirect())
          {
-         if (firstNodeInTree->getOpCode().isStore() && firstNodeInTree->getOpCode().isIndirect())
+         currentTree = generateArraysetFromSequentialStores(comp(), prevTree, currentTree, firstNodeInTree, &newTempsCreated);
+         currentTree = generateArraycopyFromSequentialStores(comp(), prevTree, currentTree, firstNodeInTree);
+         currentTree = generateArrayshiftFromSequentialStores(comp(), prevTree, currentTree);
+         }
+
+      TR::Node *currentNode = firstNodeInTree;
+      while ((currentNode->getNumChildren() >= 1) && (currentNode->getFirstChild()->getNumChildren() >= 1))
+         {
+         currentNode = currentNode->getFirstChild();
+         if (currentNode->getOpCodeValue()==TR::bu2i && currentNode->getFirstChild()->getOpCode().isLoad() && currentNode->getFirstChild()->getOpCode().isIndirect())
             {
-            currentTree = generateArraysetFromSequentialStores(comp(), prevTree, currentTree, firstNodeInTree, &newTempsCreated);
-            currentTree = generateArraycopyFromSequentialStores(comp(), prevTree, currentTree, firstNodeInTree);
-            currentTree = generateArrayshiftFromSequentialStores(comp(), prevTree, currentTree);
-            }
-         TR::Node *currentNode = firstNodeInTree;
-         while ((currentNode->getNumChildren() >= 1) &&  (currentNode->getFirstChild()->getNumChildren() >= 1))
-            {
-            currentNode = currentNode->getFirstChild();
-            if (currentNode->getOpCodeValue()==TR::bu2i && currentNode->getFirstChild()->getOpCode().isLoad() && currentNode->getFirstChild()->getOpCode().isIndirect())
-               {
-               currentTree = generateArraycopyFromSequentialLoads(comp(), currentTree, currentNode->getFirstChild());
-               }
+            currentTree = generateArraycopyFromSequentialLoads(comp(), currentTree, currentNode->getFirstChild());
             }
          }
+
       prevTree = currentTree;
       currentTree = currentTree->getNextTreeTop();
       }
