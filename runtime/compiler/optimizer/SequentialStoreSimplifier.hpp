@@ -32,6 +32,9 @@ namespace TR { class TreeTop; }
 
 class TR_StoreBaseWalker;
 
+typedef TR::typed_allocator<TR::Node*, TR::Region &> NodeForwardListAllocator;
+typedef TR::forward_list<TR::Node*, NodeForwardListAllocator> NodeForwardList;
+
 class TR_SequentialStoreSimplifier : public TR::Optimization
    {
    public:
