@@ -69,6 +69,12 @@
 #define OPT_DETAILS "O^O SEQUENTIAL STORE TRANSFORMATION: "
 #define OPT_DETAILS_SCSS "O^O SCSS: "
 
+bool isValidSeqLoadCombine(TR::Compilation* comp, TR::Node* combineNode, NodeForwardList* combineNodeList);
+bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode);
+bool isValidSeqLoadAnd(TR::Compilation* comp, TR::Node* andNode);
+bool isValidSeqLoadComponentLoad(TR::Compilation* comp, TR::Node* conversionNode);
+bool isValidSeqLoadByteConversion(TR::Compilation* comp, TR::Node* conversionNode);
+
 class TR_ShiftedValueTree
    {
    public:
@@ -563,8 +569,253 @@ bool isValidSeqLoadIMulSecondPattern(TR::Compilation* comp, TR::Node* imulNode)
    return isValidSeqLoadB2i(comp, firstChild);
    }
 
+bool isValidSeqLoadCombine(TR::Compilation* comp, TR::Node* combineNode, NodeForwardList* combineNodeList)
+   {
+   //Accepts ior and iadd nodes.
+   //TODO: expand to support long type data in the future.
+   //TODO: add recursion depth to ensure it doesn't exceed 7?
 
-int32_t getOffsetForSeqLoad(TR::Compilation * comp, TR::Node* rootNode, int32_t totalBytes, int32_t byteNumber)
+   if ((combineNode->getOpCodeValue() != TR::iadd) && (combineNode->getOpCodeValue() != TR::ior))
+      {
+      return false;
+      }
+
+   //TODO: see if I can loosen this restriction but probably not if the intermediate results are needed elsewhere.
+   if (combineNode->getReferenceCount() > 1)
+      {
+      return false;
+      }
+
+   combineNodeList->push_front(combineNode);
+
+   TR::Node* childrenArray[2];
+   childrenArray[0] = combineNode->getFirstChild();
+   childrenArray[1] = combineNode->getSecondChild();
+
+   if (((childrenArray[0]->getOpCodeValue() == TR::iadd) || (childrenArray[0]->getOpCodeValue() == TR::ior))
+      && ((childrenArray[1]->getOpCodeValue() == TR::iadd) || (childrenArray[1]->getOpCodeValue() == TR::ior))
+      )
+      {
+      return false;
+      }
+
+   for (int i = 0; i < 2; i++)
+      {
+      TR::ILOpCodes childOpCode = childrenArray[i]->getOpCodeValue();
+
+      switch (childOpCode)
+         {
+         case TR::imul:
+         case TR::ishl:
+            if (!isValidSeqLoadMulOrShl(comp, childrenArray[i]))
+               return false;
+            break;
+         case TR::iand:
+            if (!isValidSeqLoadAnd(comp, childrenArray[i]))
+               return false;
+            break;
+         case TR::iload:
+            if (!isValidSeqLoadComponentLoad(comp, childrenArray[i]))
+               return false;
+            break;
+         case TR::b2i:
+         case TR::bu2i:
+            if (!isValidSeqLoadByteConversion(comp, childrenArray[i]))
+               return false;
+            break;
+         case TR::iadd:
+         case TR::ior:
+            if (!isValidSeqLoadCombine(comp, childrenArray[i], combineNodeList))
+               return false;
+            break;
+         default:
+            return false;
+         }
+      }
+
+   return true;
+   }
+
+bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode)
+   {
+   //Accepts imul and ishl nodes.
+   //TODO: expand to support long type data in the future.
+
+   if ((mulOrShlNode->getOpCodeValue() != TR::imul) && (mulOrShlNode->getOpCodeValue() != TR::ishl))
+      {
+      return false;
+      }
+
+   TR::Node* firstChild = mulOrShlNode->getFirstChild();
+   TR::Node* secondChild = mulOrShlNode->getSecondChild();
+
+   switch (firstChild->getOpCodeValue())
+      {
+      case TR::iand:
+         if (!isValidSeqLoadAnd(comp, firstChild))
+            return false;
+         break;
+      case TR::iload:
+         if (!isValidSeqLoadComponentLoad(comp, firstChild))
+            return false;
+         break;
+      case TR::b2i:
+      case TR::bu2i:
+         if (!isValidSeqLoadByteConversion(comp, firstChild))
+            return false;
+         break;
+      default:
+         return false;
+      }
+
+   if (secondChild->getOpCodeValue() != TR::iconst)
+      {
+      return false;
+      }
+
+   //TODO: expand constants to handle Long case
+   if (mulOrShlNode->getOpCodeValue() == TR::imul)
+      {
+      switch (secondChild->getInt())
+         {
+         case 0x100:     //256
+         case 0x10000:   //256^2
+         case 0x1000000: //256^3
+            break;
+         default:
+            return false;
+         }
+      }
+   else //mulOrShlNode->getOpCodeValue() == TR::ishl
+      {
+      switch (secondChild->getInt())
+         {
+         case 8:
+         case 16:
+         case 24:
+            break;
+         default:
+            return false;
+         }
+      }
+
+   return true;
+   }
+
+bool isValidSeqLoadAnd(TR::Compilation* comp, TR::Node* andNode)
+   {
+   //Accepts iand nodes.
+   //TODO: expand to support long type data in the future.
+
+   if (andNode->getOpCodeValue() != TR::iand)
+      {
+      return false;
+      }
+
+   TR::Node* firstChild = andNode->getFirstChild();
+   TR::Node* secondChild = andNode->getSecondChild();
+
+   switch (firstChild->getOpCodeValue())
+      {
+      case TR::iload:
+         if (!isValidSeqLoadComponentLoad(comp, firstChild))
+            return false;
+         break;
+      case TR::b2i:
+      case TR::bu2i:
+         if (!isValidSeqLoadByteConversion(comp, firstChild))
+            return false;
+         break;
+      default:
+         return false;
+      }
+
+   if (secondChild->getOpCodeValue() != TR::iconst)
+      {
+      return false;
+      }
+
+   if (secondChild->getInt() != 0xFF)
+      {
+      return false;
+      }
+
+   return true;
+   }
+
+bool isValidSeqLoadComponentLoad(TR::Compilation* comp, TR::Node* conversionNode)
+   {
+   //TODO: need to implement this
+   return false;
+   }
+
+bool isValidSeqLoadByteConversion(TR::Compilation* comp, TR::Node* conversionNode)
+   {
+   /* Accepts b2i and bu2i nodes. */
+   if ((conversionNode->getOpCodeValue() != TR::b2i) && (conversionNode->getOpCodeValue() != TR::bu2i))
+      {
+      return false;
+      }
+
+   TR::Node* firstChild = conversionNode->getFirstChild();
+   TR::Node* secondChild = NULL;
+
+   if (firstChild->getOpCodeValue() != TR::bloadi)
+      {
+      return false;
+      }
+
+   firstChild = firstChild->getFirstChild();
+
+   if (comp->target().is64Bit())
+      {
+      if (firstChild->getOpCodeValue() != TR::aladd)
+         {
+         return false;
+         }
+
+      secondChild = firstChild->getSecondChild();
+      firstChild = firstChild->getFirstChild();
+
+      if ((firstChild->getOpCodeValue() != TR::aload) || (secondChild->getOpCodeValue() != TR::lsub))
+         {
+         return false;
+         }
+
+      secondChild = secondChild->getSecondChild();
+
+      if (secondChild->getOpCodeValue() != TR::lconst)
+         {
+         return false;
+         }
+      }
+   else
+      {
+      if (firstChild->getOpCodeValue() != TR::aiadd)
+         {
+         return false;
+         }
+
+      secondChild = firstChild->getSecondChild();
+      firstChild = firstChild->getFirstChild();
+
+      if ((firstChild->getOpCodeValue() != TR::aload) || (secondChild->getOpCodeValue() != TR::isub))
+         {
+         return false;
+         }
+
+      secondChild = secondChild->getSecondChild();
+
+      if (secondChild->getOpCodeValue() != TR::iconst)
+         {
+         return false;
+         }
+      }
+
+   return true;
+   }
+
+int32_t getOffsetForSeqLoadDEPRECATED(TR::Compilation * comp, TR::Node* rootNode, int32_t totalBytes, int32_t byteNumber)
    {
    TR::Node* dummyNode = rootNode;
    if (byteNumber==1)
@@ -639,7 +890,19 @@ int32_t getOffsetForSeqLoadSecondPattern(TR::Compilation* comp, TR::Node* inputN
       }
    }
 
-TR::Node* getBasePointerReferenceForSeqLoad(TR::Compilation * comp, TR::Node* rootNode, int32_t totalBytes, int32_t byteNumber)
+int32_t getOffsetForSeqLoad(TR::Compilation* comp, TR::Node* inputNode)
+   {
+   if (comp->target().is64Bit())
+      {
+      return inputNode->getFirstChild()->getFirstChild()->getSecondChild()->getSecondChild()->getLongInt() * -1;
+      }
+   else
+      {
+      return inputNode->getSecondChild()->getFirstChild()->getFirstChild()->getSecondChild()->getSecondChild()->getInt() * -1;
+      }
+   }
+
+TR::Node* getBasePointerReferenceForSeqLoadDEPRECATED(TR::Compilation * comp, TR::Node* rootNode, int32_t totalBytes, int32_t byteNumber)
    {
    TR::Node* dummyNode = rootNode;
    if (byteNumber==1)
@@ -679,8 +942,35 @@ TR::Node* getBasePointerReferenceForSeqLoadSecondPattern(TR::Compilation * comp,
       }
    }
 
-int32_t getMultValueForSeqLoad(TR::Compilation *comp, TR::Node* rootNode, int32_t totalBytes, int32_t byteNumber)
- {
+//TODO: expand to handle long case
+TR::Node* getBasePointerReferenceForSeqLoad(TR::Node* inputNode)
+   {
+   TR::Node* basePointerNode = NULL;
+
+   switch (inputNode->getOpCodeValue())
+      {
+      case TR::iand:
+      case TR::imul:
+      case TR::ishl:
+         basePointerNode = getBasePointerReferenceForSeqLoad(inputNode->getFirstChild());
+         break;
+      case TR::b2i:
+      case TR::bu2i:
+         basePointerNode = inputNode->getFirstChild()->getFirstChild()->getSecondChild()->getFirstChild()->skipConversions();
+         break;
+      case TR::iload:
+         //TODO: handle iload case
+         break;
+      default:
+         //TODO: assert, this should never happen since we should have already checked to make sure the trees were the right shape
+         break;
+      }
+
+   return basePointerNode;
+   }
+
+int32_t getMultValueForSeqLoadDEPRECATED(TR::Compilation *comp, TR::Node* rootNode, int32_t totalBytes, int32_t byteNumber)
+   {
    TR::Node* dummyNode = rootNode;
    if (byteNumber==1)
       {
@@ -720,7 +1010,34 @@ int32_t getMultValueForSeqLoadSecondPattern(TR::Compilation *comp, TR::Node* inp
       }
    }
 
-TR::Node* getALoadReferenceForSeqLoad(TR::Node* rootNode, int32_t totalBytes, int32_t byteNumber)
+//TODO: expand to handle long case
+int64_t getMultValueForSeqLoad(TR::Node* inputNode)
+   {
+   int64_t multValue = 0;
+
+   switch (inputNode->getOpCodeValue())
+      {
+      case TR::imul:
+         multValue = inputNode->getSecondChild()->getInt();
+         break;
+      case TR::ishl:
+         multValue = 1L << (inputNode->getSecondChild()->getInt());
+         break;
+      case TR::b2i:
+      case TR::bu2i:
+      case TR::iand:
+      case TR::iload:
+         multValue = 1;
+         break;
+      default:
+         //TODO: assert, this should never happen since we should have already checked to make sure the trees were the right shape
+         break;
+      }
+
+   return multValue;
+   }
+
+TR::Node* getALoadReferenceForSeqLoadDEPRECATED(TR::Node* rootNode, int32_t totalBytes, int32_t byteNumber)
    {
    TR::Node* dummyNode = rootNode;
    if (byteNumber==1)
@@ -758,6 +1075,120 @@ TR::Node* getALoadReferenceForSeqLoadSecondPattern(TR::Node* inputNode)
       {
       return inputNode->getFirstChild()->getFirstChild()->getFirstChild();
       }
+   }
+
+//TODO: expand to handle long case
+TR::Node* getALoadReferenceForSeqLoad(TR::Node* inputNode)
+   {
+   TR::Node* aloadNode = NULL;
+
+   switch (inputNode->getOpCodeValue())
+      {
+      case TR::iand:
+      case TR::imul:
+      case TR::ishl:
+         aloadNode = getALoadReferenceForSeqLoad(inputNode->getFirstChild());
+         break;
+      case TR::b2i:
+      case TR::bu2i:
+         aloadNode = inputNode->getFirstChild()->getFirstChild()->getFirstChild();
+         break;
+      case TR::iload:
+         //TODO: handle iload case
+         break;
+      default:
+         //TODO: assert, this should never happen since we should have already checked to make sure the trees were the right shape
+         break;
+      }
+
+   return aloadNode;
+   }
+
+//TODO: expand to handle long case
+TR::Node* getByteConversionNodeForSeqLoad(TR::Node* inputNode)
+   {
+   TR::Node* byteConversionNode = NULL;
+
+   switch (inputNode->getOpCodeValue())
+      {
+      case TR::iand:
+      case TR::imul:
+      case TR::ishl:
+         byteConversionNode = getByteConversionNodeForSeqLoad(inputNode->getFirstChild());
+         break;
+      case TR::b2i:
+      case TR::bu2i:
+         byteConversionNode = inputNode;
+         break;
+      case TR::iload:
+         //TODO: handle iload case
+         break;
+      default:
+         //TODO: assert, this should never happen since we should have already checked to make sure the trees were the right shape
+         break;
+      }
+
+   return byteConversionNode;
+   }
+
+bool checkForSeqLoadSignExtendedByte(TR::Node* inputNode)
+   {
+   bool signExtendedByte = false;
+
+   switch (inputNode->getOpCodeValue())
+      {
+      case TR::imul:
+      case TR::ishl:
+         signExtendedByte = checkForSeqLoadSignExtendedByte(inputNode->getFirstChild());
+         break;
+      case TR::iand:
+      case TR::bu2i:
+         signExtendedByte = false;
+         break;
+      case TR::b2i:
+         signExtendedByte = true;
+         break;
+      case TR::iload:
+         //TODO: handle iload case
+         break;
+      default:
+         //TODO: assert, this should never happen since we should have already checked to make sure the trees were the right shape
+         break;
+      }
+
+   return signExtendedByte;
+   }
+
+bool matchLittleEndianSeqLoadPattern(int32_t byteOffset[], int32_t byteCount)
+   {
+   int32_t currentByteOffset = byteOffset[0];
+
+   for (int i = 1; i < byteCount; i++)
+      {
+      if (byteOffset[i] != (currentByteOffset + 1))
+         {
+         return false;
+         }
+      currentByteOffset = byteOffset[i];
+      }
+
+   return true;
+   }
+
+bool matchBigEndianSeqLoadPattern(int32_t byteOffset[], int32_t byteCount)
+   {
+   int32_t currentByteOffset = byteOffset[0];
+
+   for (int i = 1; i < byteCount; i++)
+      {
+      if (byteOffset[i] != (currentByteOffset - 1))
+         {
+         return false;
+         }
+      currentByteOffset = byteOffset[i];
+      }
+
+   return true;
    }
 
 bool TR_ShiftedValueTree::process(TR::Node* loadNode)
@@ -1198,7 +1629,7 @@ static TR::TreeTop* generateArraycopyFromSequentialStores(TR::Compilation* comp,
    return treeTop;
    }
 
-static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, TR::TreeTop* currentTreeTop, TR::Node* ibloadNode)
+static TR::TreeTop* generateArraycopyFromSequentialLoadsDEPRECATED(TR::Compilation* comp, TR::TreeTop* currentTreeTop, TR::Node* ibloadNode)
    {
 
    static const char * disableSeqLoadOpt = feGetEnv("TR_DisableSeqLoadOpt");
@@ -1301,10 +1732,10 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
          {
          if ( !(isValidSeqLoadB2i(comp, currentNode->getSecondChild())) )
             return currentTreeTop;
-         baseOffset = getOffsetForSeqLoad(comp, rootNode, numBytes, numBytes - i);
-         aloadNode = getALoadReferenceForSeqLoad(rootNode, numBytes, numBytes - i);
-         basePointerNode = getBasePointerReferenceForSeqLoad(comp, rootNode, numBytes, numBytes - i);
-         shiftVar = getMultValueForSeqLoad(comp, rootNode, numBytes, numBytes - i);
+         baseOffset = getOffsetForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i);
+         aloadNode = getALoadReferenceForSeqLoadDEPRECATED(rootNode, numBytes, numBytes - i);
+         basePointerNode = getBasePointerReferenceForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i);
+         shiftVar = getMultValueForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i);
          if (shiftVar != 1)
             return currentTreeTop;
          }
@@ -1312,13 +1743,13 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
          {
          if ( !(isValidSeqLoadIMul(comp, currentNode)) )
             return currentTreeTop;
-         if ( !(shiftVar*multiplier==getMultValueForSeqLoad(comp, rootNode, numBytes, numBytes - i)) )  //This check is broken for numBytes == 2 since multiplier is 0 instead of 256.
+         if ( !(shiftVar*multiplier==getMultValueForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i)) )  //This check is broken for numBytes == 2 since multiplier is 0 instead of 256.
             return currentTreeTop;
-         if ( !(baseOffset == getOffsetForSeqLoad(comp, rootNode, numBytes, numBytes - i) + i)
-            || !(aloadNode == getALoadReferenceForSeqLoad(rootNode, numBytes, numBytes - i))
-            || !(basePointerNode == getBasePointerReferenceForSeqLoad(comp, rootNode, numBytes, numBytes - i)))
+         if ( !(baseOffset == getOffsetForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i) + i)
+            || !(aloadNode == getALoadReferenceForSeqLoadDEPRECATED(rootNode, numBytes, numBytes - i))
+            || !(basePointerNode == getBasePointerReferenceForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i)))
             return currentTreeTop;
-         baseOffset = getOffsetForSeqLoad(comp, rootNode, numBytes, numBytes - i);
+         baseOffset = getOffsetForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i);
          newLoadChildNode = currentNode->getFirstChild()->getFirstChild();
          newConvertChildNode = currentNode->getFirstChild();
          newMultChildNode = currentNode;
@@ -1327,13 +1758,13 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
          {
          if ( !(isValidSeqLoadIMul(comp, currentNode->getSecondChild())) )
             return currentTreeTop;
-         if ( !(baseOffset == getOffsetForSeqLoad(comp, rootNode, numBytes, numBytes - i) + i)
-            || !(aloadNode == getALoadReferenceForSeqLoad(rootNode, numBytes, numBytes - i))
-            || !(basePointerNode == getBasePointerReferenceForSeqLoad(comp, rootNode, numBytes, numBytes - i)))
+         if ( !(baseOffset == getOffsetForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i) + i)
+            || !(aloadNode == getALoadReferenceForSeqLoadDEPRECATED(rootNode, numBytes, numBytes - i))
+            || !(basePointerNode == getBasePointerReferenceForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i)))
             return currentTreeTop;
          if (multiplier == 0)
             {
-            multiplier = getMultValueForSeqLoad(comp, rootNode, numBytes, numBytes - i);
+            multiplier = getMultValueForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i);
             shiftVar = multiplier;
             if (!(multiplier == 256))
                return currentTreeTop;
@@ -1341,7 +1772,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
          else
             {
             shiftVar = multiplier * shiftVar;
-            if ( !(shiftVar == getMultValueForSeqLoad(comp, rootNode, numBytes, numBytes - i)) )
+            if ( !(shiftVar == getMultValueForSeqLoadDEPRECATED(comp, rootNode, numBytes, numBytes - i)) )
                return currentTreeTop;
             }
          }
@@ -1602,6 +2033,259 @@ static TR::TreeTop* generateArraycopyFromSequentialLoadsSecondPattern(TR::Compil
    rootNode->setAndIncChild(0, newLoadChildNode);
    oldChildNode->recursivelyDecReferenceCount();
    TR::Node::recreate(newLoadChildNode, TR::iloadi);
+
+   return currentTreeTop;
+   }
+
+static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, TR::TreeTop* currentTreeTop, TR::Node* rootNode, NodeForwardList* combineNodeList)
+   {
+   static const char * disableSeqLoadOpt = feGetEnv("TR_DisableSeqLoadOpt");
+   if (disableSeqLoadOpt)
+      {
+      return currentTreeTop;
+      }
+
+   //TODO: fix the spine checks
+#if 0
+   /* Need to make sure these loads are not under spine checks. */
+   if (comp->requiresSpineChecks() && bloadiNode->getReferenceCount() > 1)
+      {
+      TR::TreeTop *tt = currentTreeTop;
+      TR::TreeTop *lastTreeTop = currentTreeTop->getEnclosingBlock()->startOfExtendedBlock()->getFirstRealTreeTop()->getPrevTreeTop();
+
+      /* Search backwards to the top of the EBB and look at all spine checks. */
+      while (tt != lastTreeTop)
+         {
+         TR::Node *node = tt->getNode();
+         if (node->getOpCodeValue() == TR::BNDCHKwithSpineCHK ||
+             node->getOpCodeValue() == TR::SpineCHK)
+            {
+            node = node->getFirstChild();
+            while (node->getOpCode().isConversion())
+               node = node->getFirstChild();
+            if (node == bloadiNode)
+               {
+               dumpOptDetails(comp, " Sequential Load to spine checked array not reducible\n");
+               return currentTreeTop;
+               }
+            }
+         tt = tt->getPrevTreeTop();
+         }
+      }
+#endif
+
+
+   TR::Node* processedByteNodes[8];
+   TR::Node* byteConversionNodes[8];
+   int32_t byteCount = 0;
+
+   TR::Node* aloadNode = NULL;
+   TR::Node* basePointerNode = NULL;
+   TR::Node* newLoadChildNode = NULL;
+   TR::Node* newConvertChildNode = NULL;
+   TR::Node* oldChildNode = NULL;
+
+   bool littleEndianLoad = false;
+   bool signExtendResult = false;
+   int32_t byteOffset[8];
+
+   for (int i = 0; i < 8; i++)
+      {
+      processedByteNodes[i] = NULL;
+      byteConversionNodes[i] = NULL;
+      }
+
+   for (auto it = combineNodeList->begin(); it != combineNodeList->end(); ++it)
+      {
+      TR::Node* firstChild = (*it)->getFirstChild();
+      TR::Node* secondChild = (*it)->getSecondChild();
+
+      //TODO: extend to Long support
+      if ((firstChild->getOpCodeValue() != TR::ior) && (firstChild->getOpCodeValue() != TR::iadd))
+         {
+         processedByteNodes[byteCount] = firstChild;
+         byteCount++;
+         }
+
+      //TODO: extend to Long support
+      if ((secondChild->getOpCodeValue() != TR::ior) && (secondChild->getOpCodeValue() != TR::iadd))
+         {
+         processedByteNodes[byteCount] = secondChild;
+         byteCount++;
+         }
+      }
+
+   if ((byteCount != 2) && (byteCount != 3) && (byteCount != 4) && (byteCount != 8))
+      {
+      dumpOptDetails(comp, " Sequential Load of size other than 2/3/4/8 is not supported.\n");
+      return currentTreeTop;
+      }
+
+   for (int i = 0; i < byteCount; i++)
+      {
+      TR::Node* byteConversionNode = NULL;
+
+      int64_t multValue = 0;
+
+      if (0 == i)
+         {
+         aloadNode = getALoadReferenceForSeqLoad(processedByteNodes[i]);
+         basePointerNode = getBasePointerReferenceForSeqLoad(processedByteNodes[i]);
+         }
+      else
+         {
+         if (aloadNode != getALoadReferenceForSeqLoad(processedByteNodes[i]))
+            {
+            return currentTreeTop;
+            }
+
+         if (basePointerNode != getBasePointerReferenceForSeqLoad(processedByteNodes[i]))
+            {
+            return currentTreeTop;
+            }
+         }
+
+      byteConversionNode = getByteConversionNodeForSeqLoad(processedByteNodes[i]);
+
+      multValue = getMultValueForSeqLoad(processedByteNodes[i]);
+
+      if (1L << ((byteCount - 1) * 8) == multValue)
+         {
+         /* Check if most significant byte is signed extended or not. */
+         signExtendResult = checkForSeqLoadSignExtendedByte(processedByteNodes[i]); //TODO: work from here.
+         }
+      else
+         {
+         /* Other bytes can not be sign extended */
+         if (checkForSeqLoadSignExtendedByte(processedByteNodes[i]))
+            {
+            return currentTreeTop;
+            }
+         }
+
+      //TODO: add support for Long values
+      switch (multValue)
+         {
+         case 0x1:
+            if (byteConversionNodes[0] != NULL)
+               return currentTreeTop;
+            byteConversionNodes[0] = byteConversionNode;
+            byteOffset[0] = getOffsetForSeqLoad(comp, byteConversionNode);
+            break;
+         case 0x100:
+            if (byteConversionNodes[1] != NULL)
+               return currentTreeTop;
+            byteConversionNodes[1] = byteConversionNode;
+            byteOffset[1] = getOffsetForSeqLoad(comp, byteConversionNode);
+            break;
+         case 0x10000:
+            if (byteConversionNodes[2] != NULL)
+               return currentTreeTop;
+            byteConversionNodes[2] = byteConversionNode;
+            byteOffset[2] = getOffsetForSeqLoad(comp, byteConversionNode);
+            break;
+         case 0x1000000:
+            if (byteConversionNodes[3] != NULL)
+               return currentTreeTop;
+            byteConversionNodes[3] = byteConversionNode;
+            byteOffset[3] = getOffsetForSeqLoad(comp, byteConversionNode);
+            break;
+         default:
+            dumpOptDetails(comp, " Sequential Load check failed. Incompatible mulValue: %d, node: %p\n", multValue, processedByteNodes[i]);
+            return currentTreeTop;
+         }
+      }
+
+   if (matchLittleEndianSeqLoadPattern(byteOffset, byteCount))
+      {
+      littleEndianLoad = true;
+
+      if (3 == byteCount)
+         {
+         newConvertChildNode = byteConversionNodes[1];
+         newLoadChildNode = byteConversionNodes[1]->getFirstChild();
+         }
+      else
+         {
+         newConvertChildNode = byteConversionNodes[0];
+         newLoadChildNode = byteConversionNodes[0]->getFirstChild();
+         }
+      }
+   else if (matchBigEndianSeqLoadPattern(byteOffset, byteCount))
+      {
+      littleEndianLoad = false;
+      newConvertChildNode = byteConversionNodes[byteCount-1];
+      newLoadChildNode = byteConversionNodes[byteCount-1]->getFirstChild();
+      }
+   else
+      {
+      return currentTreeTop;
+      }
+
+   //TODO: add reverse load support
+   if (littleEndianLoad && !comp->target().cpu.isLittleEndian())
+      {
+      return currentTreeTop;
+      }
+
+   //TODO: add reverse load support
+   if (!littleEndianLoad && comp->target().cpu.isLittleEndian())
+      {
+      return currentTreeTop;
+      }
+
+   if (!performTransformation(comp, "%sReducing sequential loads\n", OPT_DETAILS))
+      {
+      return currentTreeTop;
+      }
+
+   dumpOptDetails(comp, " Sequential Load Second Pattern reduced at node: %p\n", rootNode);
+
+   //TODO: add reverse load support.
+   //TODO: add 8 byte load support.
+   if (4 == byteCount)
+      {
+      oldChildNode = rootNode->getFirstChild();
+      rootNode->setAndIncChild(0, newLoadChildNode);
+      oldChildNode->recursivelyDecReferenceCount();
+      TR::Node::recreate(newLoadChildNode, TR::iloadi);
+      }
+   else if (2 == byteCount)
+      {
+      oldChildNode = rootNode->getFirstChild();
+      rootNode->setAndIncChild(0, newConvertChildNode);
+      oldChildNode->recursivelyDecReferenceCount();
+      TR::Node::recreate(newLoadChildNode, TR::sloadi);
+      if (signExtendResult)
+         {
+         TR::Node::recreate(newConvertChildNode, TR::s2i);
+         }
+      else
+         {
+         TR::Node::recreate(newConvertChildNode, TR::su2i);
+         }
+      }
+   else if (3 == byteCount)
+      {
+      oldChildNode = rootNode->getFirstChild();
+
+      TR::Node * mulNode = TR::Node::create(TR::imul, 2, newConvertChildNode, TR::Node::create(TR::iconst, 0, 256));
+      TR::Node * orNode = TR::Node::create(TR::ior, 2, mulNode, byteConversionNodes[0]);
+      rootNode->setAndIncChild(0, orNode);
+
+      oldChildNode->recursivelyDecReferenceCount();
+
+      TR::Node::recreate(byteConversionNodes[0], TR::bu2i);
+      TR::Node::recreate(newLoadChildNode, TR::sloadi);
+      if (signExtendResult)
+         {
+         TR::Node::recreate(newConvertChildNode, TR::s2i);
+         }
+      else
+         {
+         TR::Node::recreate(newConvertChildNode, TR::su2i);
+         }
+      }
 
    return currentTreeTop;
    }
@@ -2687,6 +3371,7 @@ static TR::TreeTop* generateArrayshiftFromSequentialStores(TR::Compilation * com
 
 int32_t TR_SequentialStoreSimplifier::perform()
    {
+   //TODO: this disabled the opt on 64 but Power. Need a workaround.
    if (comp()->cg()->getSupportsAlignedAccessOnly() && comp()->cg()->supportsInternalPointers())
       return 1; // temporary until we find a proper fix. Only PPC-64 should be affected.
 
@@ -2712,16 +3397,36 @@ int32_t TR_SequentialStoreSimplifier::perform()
          }
 
       TR::Node *currentNode = firstNodeInTree;
-      while ((currentNode->getNumChildren() >= 1) && (currentNode->getFirstChild()->getNumChildren() >= 1))
+
+      static bool useOldSeqLoadOpt = (feGetEnv("TR_UseOldSeqLoadOpt") != NULL);
+      if (!useOldSeqLoadOpt)
          {
-         currentNode = currentNode->getFirstChild();
-         if (currentNode->getOpCodeValue()==TR::bu2i && currentNode->getFirstChild()->getOpCode().isLoad() && currentNode->getFirstChild()->getOpCode().isIndirect())
+         //TODO: see if I can make this initial search better.
+         NodeForwardList* combineNodeList = new (stackMemoryRegion) NodeForwardList(NodeForwardListAllocator(stackMemoryRegion));
+         while (currentNode->getNumChildren() >= 1)
             {
-            currentTree = generateArraycopyFromSequentialLoads(comp(), currentTree, currentNode->getFirstChild());
+            if (isValidSeqLoadCombine(comp(), currentNode->getFirstChild(), combineNodeList))
+               {
+               currentTree = generateArraycopyFromSequentialLoads(comp(), currentTree, currentNode, combineNodeList);
+               break;
+               }
+            combineNodeList->clear();
+            currentNode = currentNode->getFirstChild();
+            }
+         }
+      else
+         {
+         while ((currentNode->getNumChildren() >= 1) && (currentNode->getFirstChild()->getNumChildren() >= 1))
+            {
+            currentNode = currentNode->getFirstChild();
+            if (currentNode->getOpCodeValue()==TR::bu2i && currentNode->getFirstChild()->getOpCode().isLoad() && currentNode->getFirstChild()->getOpCode().isIndirect())
+               {
+               currentTree = generateArraycopyFromSequentialLoadsDEPRECATED(comp(), currentTree, currentNode->getFirstChild());
+               }
             }
          }
 
-      TR::Node *nodeHistory4 = NULL; //Parent of nodeHistory3 on the search path.
+      /*TR::Node *nodeHistory4 = NULL; //Parent of nodeHistory3 on the search path.
       TR::Node *nodeHistory3 = NULL; //Parent of nodeHistory2 on the search path.
       TR::Node *nodeHistory2 = NULL; //Parent of nodeHistory1 on the search path.
       TR::Node *nodeHistory1 = NULL; //Parent of currentNode on the search path.
@@ -2767,7 +3472,7 @@ int32_t TR_SequentialStoreSimplifier::perform()
                break;
                }
             }
-         }
+         }*/
 
       prevTree = currentTree;
       currentTree = currentTree->getNextTreeTop();
