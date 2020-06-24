@@ -819,9 +819,9 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode)
       {
       switch (secondChild->getInt())
          {
-         case 0x100:     //256
-         case 0x10000:   //256^2
-         case 0x1000000: //256^3
+         case 0x100:     /* 256   */
+         case 0x10000:   /* 256^2 */
+         case 0x1000000: /* 256^3 */
             break;
          default:
             return false;
@@ -843,13 +843,13 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode)
       {
       switch (secondChild->getLongInt())
          {
-         case 0x100L:             //256
-         case 0x10000L:           //256^2
-         case 0x1000000L:         //256^3
-         case 0x100000000L:       //256^4
-         case 0x10000000000L:     //256^5
-         case 0x1000000000000L:   //256^6
-         case 0x100000000000000L: //256^7
+         case 0x100L:             /* 256   */
+         case 0x10000L:           /* 256^2 */
+         case 0x1000000L:         /* 256^3 */
+         case 0x100000000L:       /* 256^4 */
+         case 0x10000000000L:     /* 256^5 */
+         case 0x1000000000000L:   /* 256^6 */
+         case 0x100000000000000L: /* 256^7 */
             break;
          default:
             return false;
