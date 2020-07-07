@@ -435,6 +435,7 @@ const OptimizationStrategy hotStrategyOpts[] =
    { OMR::loopAliasRefinerGroup,                 OMR::IfLoops     },
    { OMR::recompilationModifier,                 OMR::IfEnabledAndNotProfiling },
    { OMR::globalCopyPropagation,                 OMR::IfMoreThanOneBlock       }, // Can produce opportunities for store sinking
+   { OMR::localCSE,                              OMR::IfEnabled                }, //common up lit pool refs in the same block
    { OMR::sequentialStoreSimplificationGroup,                             }, // reduce sequential stores into an arrayset
    { OMR::prefetchInsertionGroup,                OMR::IfLoops                  }, // created IL should not be moved
    { OMR::partialRedundancyEliminationGroup                               },
