@@ -951,6 +951,7 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, TR::Node* conversionNod
       return false;
       }
 
+   //TODO: fix this. Sometimes the ref count is not 1.
    if (firstChild->getReferenceCount() > 1)
       {
       return false;
@@ -2089,7 +2090,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
    dumpOptDetails(comp, " Sequential Load Second Pattern reduced at node: %p\n", rootNode);
 
    //TODO: add reverse load support.
-   if (4 == byteCount)
+   if ((4 == byteCount) || (8 == byteCount))
       {
       TR::Node* childNode1 = NULL;
       TR::Node* childNode2 = NULL;
@@ -2098,66 +2099,74 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
       childNode1 = oldChildNode->getFirstChild();
       childNode2 = oldChildNode->getSecondChild();
 
-      TR::Node::recreateWithSymRef(oldChildNode, TR::iloadi, newLoadChildNode->getSymbolReference());
+      if (4 == byteCount)
+         {
+         TR::Node::recreateWithSymRef(oldChildNode, TR::iloadi, newLoadChildNode->getSymbolReference());
+         }
+      else /* Handles the byteCount == 8 case. */
+         {
+         TR::Node::recreateWithSymRef(oldChildNode, TR::lloadi, newLoadChildNode->getSymbolReference());
+         }
+
       oldChildNode->setNumChildren(1);
       oldChildNode->setAndIncChild(0, newLoadChildNode->getFirstChild());
 
       childNode1->recursivelyDecReferenceCount();
       childNode2->recursivelyDecReferenceCount();
       }
-
-#if 0
-   if (4 == byteCount)
-      {
-      oldChildNode = rootNode->getFirstChild();
-      rootNode->setAndIncChild(0, newLoadChildNode);
-      oldChildNode->recursivelyDecReferenceCount();
-      TR::Node::recreate(newLoadChildNode, TR::iloadi);
-      }
-   else if (8 == byteCount)
-      {
-      oldChildNode = rootNode->getFirstChild();
-      rootNode->setAndIncChild(0, newLoadChildNode);
-      oldChildNode->recursivelyDecReferenceCount();
-      TR::Node::recreate(newLoadChildNode, TR::lloadi);
-      }
    else if (2 == byteCount)
       {
+      TR::Node* childNode1 = NULL;
+      TR::Node* childNode2 = NULL;
+
       oldChildNode = rootNode->getFirstChild();
-      rootNode->setAndIncChild(0, newConvertChildNode);
-      oldChildNode->recursivelyDecReferenceCount();
-      TR::Node::recreate(newLoadChildNode, TR::sloadi);
+      childNode1 = oldChildNode->getFirstChild();
+      childNode2 = oldChildNode->getSecondChild();
+
       if (signExtendResult)
          {
-         TR::Node::recreate(newConvertChildNode, TR::s2i);
+         TR::Node::recreate(oldChildNode, TR::s2i);
          }
       else
          {
-         TR::Node::recreate(newConvertChildNode, TR::su2i);
+         TR::Node::recreate(oldChildNode, TR::su2i);
          }
+
+      oldChildNode->setNumChildren(1);
+      oldChildNode->setAndIncChild(0, newLoadChildNode);
+      TR::Node::recreate(newLoadChildNode, TR::sloadi);  //TODO: this only works if the refcount is 1 so make sure it is.
+
+      childNode1->recursivelyDecReferenceCount();
+      childNode2->recursivelyDecReferenceCount();
       }
    else if (3 == byteCount)
       {
+      TR::Node* childNode1 = NULL;
+      TR::Node* childNode2 = NULL;
+
       oldChildNode = rootNode->getFirstChild();
+      childNode1 = oldChildNode->getFirstChild();
+      childNode2 = oldChildNode->getSecondChild();
 
       TR::Node * mulNode = TR::Node::create(TR::imul, 2, newConvertChildNode, TR::Node::create(TR::iconst, 0, 256));
-      TR::Node * orNode = TR::Node::create(TR::ior, 2, mulNode, byteConversionNodes[0]);
-      rootNode->setAndIncChild(0, orNode);
 
-      oldChildNode->recursivelyDecReferenceCount();
+      oldChildNode->setAndIncChild(0, mulNode);
+      oldChildNode->setAndIncChild(1, byteConversionNodes[0]);
 
-      TR::Node::recreate(byteConversionNodes[0], TR::bu2i);
-      TR::Node::recreate(newLoadChildNode, TR::sloadi);
+      childNode1->recursivelyDecReferenceCount();
+      childNode2->recursivelyDecReferenceCount();
+
+      TR::Node::recreate(byteConversionNodes[0], TR::bu2i); //TODO: this only works if the refcount is 1 so make sure it is.
+      TR::Node::recreate(newLoadChildNode, TR::sloadi);     //TODO: this only works if the refcount is 1 so make sure it is.
       if (signExtendResult)
          {
-         TR::Node::recreate(newConvertChildNode, TR::s2i);
+         TR::Node::recreate(newConvertChildNode, TR::s2i);  //TODO: this only works if the refcount is 1 so make sure it is.
          }
       else
          {
-         TR::Node::recreate(newConvertChildNode, TR::su2i);
+         TR::Node::recreate(newConvertChildNode, TR::su2i); //TODO: this only works if the refcount is 1 so make sure it is.
          }
       }
-#endif
 
    return currentTreeTop;
    }
