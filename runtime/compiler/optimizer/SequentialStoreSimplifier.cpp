@@ -694,7 +694,7 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, int32_t combineNodeCount, TR::
       }
 
    //TODO: see if I can loosen this restriction but probably not if the intermediate results are needed elsewhere.
-   if (combineNode->getReferenceCount() > 1)
+   if (combineNodeCount > 0 && combineNode->getReferenceCount() > 1)
       {
       return false;
       }
@@ -947,6 +947,11 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, TR::Node* conversionNod
    TR::Node* secondChild = NULL;
 
    if (firstChild->getOpCodeValue() != TR::bloadi)
+      {
+      return false;
+      }
+
+   if (firstChild->getReferenceCount() > 1)
       {
       return false;
       }
@@ -2086,6 +2091,24 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
    //TODO: add reverse load support.
    if (4 == byteCount)
       {
+      TR::Node* childNode1 = NULL;
+      TR::Node* childNode2 = NULL;
+
+      oldChildNode = rootNode->getFirstChild();
+      childNode1 = oldChildNode->getFirstChild();
+      childNode2 = oldChildNode->getSecondChild();
+
+      TR::Node::recreateWithSymRef(oldChildNode, TR::iloadi, newLoadChildNode->getSymbolReference());
+      oldChildNode->setNumChildren(1);
+      oldChildNode->setAndIncChild(0, newLoadChildNode->getFirstChild());
+
+      childNode1->recursivelyDecReferenceCount();
+      childNode2->recursivelyDecReferenceCount();
+      }
+
+#if 0
+   if (4 == byteCount)
+      {
       oldChildNode = rootNode->getFirstChild();
       rootNode->setAndIncChild(0, newLoadChildNode);
       oldChildNode->recursivelyDecReferenceCount();
@@ -2134,6 +2157,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
          TR::Node::recreate(newConvertChildNode, TR::su2i);
          }
       }
+#endif
 
    return currentTreeTop;
    }
