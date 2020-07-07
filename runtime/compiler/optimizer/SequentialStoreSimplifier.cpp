@@ -72,7 +72,6 @@
 bool isValidSeqLoadCombine(TR::Compilation* comp, int32_t combineNodeCount, TR::Node* combineNode, NodeForwardList* combineNodeList);
 bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode);
 bool isValidSeqLoadAnd(TR::Compilation* comp, TR::Node* andNode);
-bool isValidSeqLoadComponentLoad(TR::Compilation* comp, TR::Node* conversionNode);
 bool isValidSeqLoadByteConversion(TR::Compilation* comp, TR::Node* conversionNode);
 
 class TR_ShiftedValueTree
@@ -747,11 +746,6 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, int32_t combineNodeCount, TR::
             if (!isValidSeqLoadAnd(comp, childrenArray[i]))
                return false;
             break;
-         case TR::iload:
-         case TR::lload:
-            if (!isValidSeqLoadComponentLoad(comp, childrenArray[i]))
-               return false;
-            break;
          case TR::b2i:
          case TR::b2l:
          case TR::bu2i:
@@ -792,11 +786,6 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode)
       case TR::iand:
       case TR::land:
          if (!isValidSeqLoadAnd(comp, firstChild))
-            return false;
-         break;
-      case TR::iload:
-      case TR::lload:
-         if (!isValidSeqLoadComponentLoad(comp, firstChild))
             return false;
          break;
       case TR::b2i:
@@ -888,11 +877,6 @@ bool isValidSeqLoadAnd(TR::Compilation* comp, TR::Node* andNode)
 
    switch (firstChild->getOpCodeValue())
       {
-      case TR::iload:
-      case TR::lload:
-         if (!isValidSeqLoadComponentLoad(comp, firstChild))
-            return false;
-         break;
       case TR::b2i:
       case TR::b2l:
       case TR::bu2i:
@@ -924,13 +908,6 @@ bool isValidSeqLoadAnd(TR::Compilation* comp, TR::Node* andNode)
       }
 
    return true;
-   }
-
-bool isValidSeqLoadComponentLoad(TR::Compilation* comp, TR::Node* conversionNode)
-   {
-   /* Accepts iload and lload nodes. */
-   //TODO: need to implement this
-   return false;
    }
 
 bool isValidSeqLoadByteConversion(TR::Compilation* comp, TR::Node* conversionNode)
@@ -1016,7 +993,7 @@ int32_t getOffsetForSeqLoad(TR::Compilation* comp, TR::Node* byteConversionNode)
       }
    else
       {
-      return byteConversionNode->getSecondChild()->getFirstChild()->getFirstChild()->getSecondChild()->getSecondChild()->getInt() * -1;
+      return byteConversionNode->getFirstChild()->getFirstChild()->getSecondChild()->getSecondChild()->getInt() * -1;
       }
    }
 
@@ -1043,11 +1020,6 @@ TR::Node* getBasePointerReferenceForSeqLoad(TR::Node* inputNode)
       case TR::bu2i:
       case TR::bu2l:
          basePointerNode = inputNode->getFirstChild()->getFirstChild()->getSecondChild()->getFirstChild()->skipConversions();
-         break;
-      case TR::iload:
-      case TR::lload:
-         //TODO: handle iload and lload cases
-         TR_ASSERT_FATAL_WITH_NODE(inputNode, 0, "iload and lload not supported. This should have been caught earlier. inputNode: %p.", inputNode);
          break;
       default:
          TR_ASSERT_FATAL_WITH_NODE(inputNode, 0, "Unsupported opCode. This should have been caught earlier. inputNode: %p.", inputNode);
@@ -1084,9 +1056,7 @@ int64_t getMultValueForSeqLoad(TR::Node* inputNode)
       case TR::bu2i:
       case TR::bu2l:
       case TR::iand:
-      case TR::iload:
       case TR::land:
-      case TR::lload:
          multValue = 1;
          break;
       default:
@@ -1121,11 +1091,6 @@ TR::Node* getALoadReferenceForSeqLoad(TR::Node* inputNode)
       case TR::bu2l:
          aloadNode = inputNode->getFirstChild()->getFirstChild()->getFirstChild();
          break;
-      case TR::iload:
-      case TR::lload:
-         //TODO: handle iload and lload cases
-         TR_ASSERT_FATAL_WITH_NODE(inputNode, 0, "iload and lload not supported. This should have been caught earlier. inputNode: %p.", inputNode);
-         break;
       default:
          TR_ASSERT_FATAL_WITH_NODE(inputNode, 0, "Unsupported opCode. This should have been caught earlier. inputNode: %p.", inputNode);
          break;
@@ -1157,11 +1122,6 @@ TR::Node* getByteConversionNodeForSeqLoad(TR::Node* inputNode)
       case TR::bu2i:
       case TR::bu2l:
          byteConversionNode = inputNode;
-         break;
-      case TR::iload:
-      case TR::lload:
-         //TODO: handle iload and lload cases
-         TR_ASSERT_FATAL_WITH_NODE(inputNode, 0, "iload and lload not supported. This should have been caught earlier. inputNode: %p.", inputNode);
          break;
       default:
          TR_ASSERT_FATAL_WITH_NODE(inputNode, 0, "Unsupported opCode. This should have been caught earlier. inputNode: %p.", inputNode);
@@ -1196,11 +1156,6 @@ bool checkForSeqLoadSignExtendedByte(TR::Node* inputNode)
       case TR::b2i:
       case TR::b2l:
          signExtendedByte = true;
-         break;
-      case TR::iload:
-      case TR::lload:
-         //TODO: handle iload and lload cases
-         TR_ASSERT_FATAL_WITH_NODE(inputNode, 0, "iload and lload not supported. This should have been caught earlier. inputNode: %p.", inputNode);
          break;
       default:
          TR_ASSERT_FATAL_WITH_NODE(inputNode, 0, "Unsupported opCode. This should have been caught earlier. inputNode: %p.", inputNode);
@@ -1721,7 +1676,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoadsDEPRECATED(TR::Compilati
 
    /*
     * This version of generateArraycopyFromSequentialLoads does not work when numBytes is equal to 2.
-    * This version is depecated so the opt bails out here rather than fix this particular version.
+    * This version is deprecated so the opt bails out here rather than fix this particular version.
     * Even if it did not bail out here, a check would likely fail later on anyways.
     */
    if (2 == numBytes)
@@ -1903,20 +1858,24 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
       }
 #endif
 
-
    TR::Node* processedByteNodes[8];
    TR::Node* byteConversionNodes[8];
+   int32_t byteOffset[8];
+
    int32_t byteCount = 0;
 
    TR::Node* aloadNode = NULL;
    TR::Node* basePointerNode = NULL;
+
+   bool signExtendResult = false;
+   bool littleEndianLoad = false;
+
    TR::Node* newLoadChildNode = NULL;
    TR::Node* newConvertChildNode = NULL;
-   TR::Node* oldChildNode = NULL;
 
-   bool littleEndianLoad = false;
-   bool signExtendResult = false;
-   int32_t byteOffset[8];
+   TR::Node* rootChildNode = NULL;
+   TR::Node* disconnectedNode1 = NULL;
+   TR::Node* disconnectedNode2 = NULL;
 
    for (int i = 0; i < 8; i++)
       {
@@ -2089,75 +2048,50 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
 
    dumpOptDetails(comp, " Sequential Load Second Pattern reduced at node: %p\n", rootNode);
 
+   rootChildNode = rootNode->getFirstChild();
+   disconnectedNode1 = rootChildNode->getFirstChild();
+   disconnectedNode2 = rootChildNode->getSecondChild();
+
    //TODO: add reverse load support.
    if ((4 == byteCount) || (8 == byteCount))
       {
-      TR::Node* childNode1 = NULL;
-      TR::Node* childNode2 = NULL;
-
-      oldChildNode = rootNode->getFirstChild();
-      childNode1 = oldChildNode->getFirstChild();
-      childNode2 = oldChildNode->getSecondChild();
-
       if (4 == byteCount)
          {
-         TR::Node::recreateWithSymRef(oldChildNode, TR::iloadi, newLoadChildNode->getSymbolReference());
+         TR::Node::recreateWithSymRef(rootChildNode, TR::iloadi, newLoadChildNode->getSymbolReference());
          }
       else /* Handles the byteCount == 8 case. */
          {
-         TR::Node::recreateWithSymRef(oldChildNode, TR::lloadi, newLoadChildNode->getSymbolReference());
+         TR::Node::recreateWithSymRef(rootChildNode, TR::lloadi, newLoadChildNode->getSymbolReference());
          }
 
-      oldChildNode->setNumChildren(1);
-      oldChildNode->setAndIncChild(0, newLoadChildNode->getFirstChild());
-
-      childNode1->recursivelyDecReferenceCount();
-      childNode2->recursivelyDecReferenceCount();
+      rootChildNode->setNumChildren(1);
+      rootChildNode->setAndIncChild(0, newLoadChildNode->getFirstChild());
       }
    else if (2 == byteCount)
       {
-      TR::Node* childNode1 = NULL;
-      TR::Node* childNode2 = NULL;
-
-      oldChildNode = rootNode->getFirstChild();
-      childNode1 = oldChildNode->getFirstChild();
-      childNode2 = oldChildNode->getSecondChild();
-
       if (signExtendResult)
          {
-         TR::Node::recreate(oldChildNode, TR::s2i);
+         TR::Node::recreate(rootChildNode, TR::s2i);
          }
       else
          {
-         TR::Node::recreate(oldChildNode, TR::su2i);
+         TR::Node::recreate(rootChildNode, TR::su2i);
          }
 
-      oldChildNode->setNumChildren(1);
-      oldChildNode->setAndIncChild(0, newLoadChildNode);
+      rootChildNode->setNumChildren(1);
+      rootChildNode->setAndIncChild(0, newLoadChildNode);
       TR::Node::recreate(newLoadChildNode, TR::sloadi);  //TODO: this only works if the refcount is 1 so make sure it is.
-
-      childNode1->recursivelyDecReferenceCount();
-      childNode2->recursivelyDecReferenceCount();
       }
    else if (3 == byteCount)
       {
-      TR::Node* childNode1 = NULL;
-      TR::Node* childNode2 = NULL;
-
-      oldChildNode = rootNode->getFirstChild();
-      childNode1 = oldChildNode->getFirstChild();
-      childNode2 = oldChildNode->getSecondChild();
-
       TR::Node * mulNode = TR::Node::create(TR::imul, 2, newConvertChildNode, TR::Node::create(TR::iconst, 0, 256));
 
-      oldChildNode->setAndIncChild(0, mulNode);
-      oldChildNode->setAndIncChild(1, byteConversionNodes[0]);
-
-      childNode1->recursivelyDecReferenceCount();
-      childNode2->recursivelyDecReferenceCount();
+      rootChildNode->setAndIncChild(0, mulNode);
+      rootChildNode->setAndIncChild(1, byteConversionNodes[0]);
 
       TR::Node::recreate(byteConversionNodes[0], TR::bu2i); //TODO: this only works if the refcount is 1 so make sure it is.
       TR::Node::recreate(newLoadChildNode, TR::sloadi);     //TODO: this only works if the refcount is 1 so make sure it is.
+
       if (signExtendResult)
          {
          TR::Node::recreate(newConvertChildNode, TR::s2i);  //TODO: this only works if the refcount is 1 so make sure it is.
@@ -2167,6 +2101,9 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
          TR::Node::recreate(newConvertChildNode, TR::su2i); //TODO: this only works if the refcount is 1 so make sure it is.
          }
       }
+
+   disconnectedNode1->recursivelyDecReferenceCount();
+   disconnectedNode2->recursivelyDecReferenceCount();
 
    return currentTreeTop;
    }
@@ -3266,6 +3203,8 @@ int32_t TR_SequentialStoreSimplifier::perform()
 
    vcount_t visitCount1 = comp()->incOrResetVisitCount();
 
+   NodeForwardList* combineNodeList = new (stackMemoryRegion) NodeForwardList(NodeForwardListAllocator(stackMemoryRegion));
+
    while (currentTree)
       {
       TR::Node *firstNodeInTree = currentTree->getNode();
@@ -3283,15 +3222,14 @@ int32_t TR_SequentialStoreSimplifier::perform()
       if (!useOldSeqLoadOpt)
          {
          //TODO: see if I can make this initial search better.
-         NodeForwardList* combineNodeList = new (stackMemoryRegion) NodeForwardList(NodeForwardListAllocator(stackMemoryRegion));
          while (currentNode->getNumChildren() >= 1)
             {
+            combineNodeList->clear();
             if (isValidSeqLoadCombine(comp(), 0, currentNode->getFirstChild(), combineNodeList))
                {
                currentTree = generateArraycopyFromSequentialLoads(comp(), currentTree, currentNode, combineNodeList);
                break;
                }
-            combineNodeList->clear();
             currentNode = currentNode->getFirstChild();
             }
          }
