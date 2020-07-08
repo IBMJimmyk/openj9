@@ -692,7 +692,6 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, int32_t combineNodeCount, TR::
       return false;
       }
 
-   //TODO: see if I can loosen this restriction but probably not if the intermediate results are needed elsewhere.
    if (combineNodeCount > 0 && combineNode->getReferenceCount() > 1)
       {
       return false;
@@ -774,6 +773,11 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode)
    if ((mulOrShlNode->getOpCodeValue() != TR::imul) && (mulOrShlNode->getOpCodeValue() != TR::ishl) &&
        (mulOrShlNode->getOpCodeValue() != TR::lmul) && (mulOrShlNode->getOpCodeValue() != TR::lshl)
       )
+      {
+      return false;
+      }
+
+   if (mulOrShlNode->getReferenceCount() > 1)
       {
       return false;
       }
@@ -872,6 +876,11 @@ bool isValidSeqLoadAnd(TR::Compilation* comp, TR::Node* andNode)
       return false;
       }
 
+   if (andNode->getReferenceCount() > 1)
+      {
+      return false;
+      }
+
    TR::Node* firstChild = andNode->getFirstChild();
    TR::Node* secondChild = andNode->getSecondChild();
 
@@ -920,6 +929,11 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, TR::Node* conversionNod
       return false;
       }
 
+   if (conversionNode->getReferenceCount() > 1)
+      {
+      return false;
+      }
+
    TR::Node* firstChild = conversionNode->getFirstChild();
    TR::Node* secondChild = NULL;
 
@@ -928,7 +942,6 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, TR::Node* conversionNod
       return false;
       }
 
-   //TODO: fix this. Sometimes the ref count is not 1.
    if (firstChild->getReferenceCount() > 1)
       {
       return false;
@@ -2080,7 +2093,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
 
       rootChildNode->setNumChildren(1);
       rootChildNode->setAndIncChild(0, newLoadChildNode);
-      TR::Node::recreate(newLoadChildNode, TR::sloadi);  //TODO: this only works if the refcount is 1 so make sure it is.
+      TR::Node::recreate(newLoadChildNode, TR::sloadi);
       }
    else if (3 == byteCount)
       {
@@ -2089,16 +2102,16 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
       rootChildNode->setAndIncChild(0, mulNode);
       rootChildNode->setAndIncChild(1, byteConversionNodes[0]);
 
-      TR::Node::recreate(byteConversionNodes[0], TR::bu2i); //TODO: this only works if the refcount is 1 so make sure it is.
-      TR::Node::recreate(newLoadChildNode, TR::sloadi);     //TODO: this only works if the refcount is 1 so make sure it is.
+      TR::Node::recreate(byteConversionNodes[0], TR::bu2i);
+      TR::Node::recreate(newLoadChildNode, TR::sloadi);
 
       if (signExtendResult)
          {
-         TR::Node::recreate(newConvertChildNode, TR::s2i);  //TODO: this only works if the refcount is 1 so make sure it is.
+         TR::Node::recreate(newConvertChildNode, TR::s2i);
          }
       else
          {
-         TR::Node::recreate(newConvertChildNode, TR::su2i); //TODO: this only works if the refcount is 1 so make sure it is.
+         TR::Node::recreate(newConvertChildNode, TR::su2i);
          }
       }
 
