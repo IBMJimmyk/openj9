@@ -434,9 +434,6 @@ const OptimizationStrategy hotStrategyOpts[] =
    { OMR::redundantInductionVarElimination,      OMR::IfLoops                  },
    { OMR::loopAliasRefinerGroup,                 OMR::IfLoops     },
    { OMR::recompilationModifier,                 OMR::IfEnabledAndNotProfiling },
-   { OMR::localCSE,                              OMR::IfEnabled                }, //common up lit pool refs in the same block
-   { OMR::globalDeadStoreElimination,            OMR::IfEnabled                },
-   { OMR::deadTreesElimination,                  OMR::IfEnabled                }, // cleanup at the end
    { OMR::sequentialStoreSimplificationGroup,                             }, // reduce sequential stores into an arrayset
    { OMR::prefetchInsertionGroup,                OMR::IfLoops                  }, // created IL should not be moved
    { OMR::partialRedundancyEliminationGroup                               },
@@ -583,7 +580,10 @@ const OptimizationStrategy sequentialLoadAndStoreWarmOpts[] =
 
 const OptimizationStrategy sequentialStoreSimplificationOpts[] =
    {
-   { OMR::treeSimplification },
+   { OMR::localCSE                             }, //common up lit pool refs in the same block
+   { OMR::globalDeadStoreElimination           },
+   { OMR::deadTreesElimination                 }, // cleanup at the end
+   { OMR::treeSimplification                   },
    { OMR::sequentialStoreSimplification        },
    { OMR::treeSimplification                   }, // might fold expressions created by versioning/induction variables
    { OMR::endGroup                             }
