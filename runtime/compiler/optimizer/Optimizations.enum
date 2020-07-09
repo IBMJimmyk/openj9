@@ -28,7 +28,6 @@
 #include "optimizer/OMROptimizations.enum"
 
    OPTIMIZATION(profileGenerator)
-   OPTIMIZATION(sequentialStoreSimplification)
    OPTIMIZATION(osrGuardInsertion)
    OPTIMIZATION(osrGuardRemoval)
    OPTIMIZATION(jProfilingBlock)
