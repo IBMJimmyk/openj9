@@ -69,10 +69,10 @@
 #define OPT_DETAILS "O^O SEQUENTIAL STORE TRANSFORMATION: "
 #define OPT_DETAILS_SCSS "O^O SCSS: "
 
-bool isValidSeqLoadCombine(TR::Compilation* comp, int32_t combineNodeCount, TR::Node* combineNode, NodeForwardList* combineNodeList);
-bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode);
-bool isValidSeqLoadAnd(TR::Compilation* comp, TR::Node* andNode);
-bool isValidSeqLoadByteConversion(TR::Compilation* comp, TR::Node* conversionNode);
+bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNodeCount, TR::Node* combineNode, NodeForwardList* combineNodeList);
+bool isValidSeqLoadMulOrShl(TR::Compilation* comp, bool trace, TR::Node* mulOrShlNode);
+bool isValidSeqLoadAnd(TR::Compilation* comp, bool trace, TR::Node* andNode);
+bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* conversionNode);
 
 class TR_ShiftedValueTree
    {
@@ -682,7 +682,7 @@ TR::Node* getALoadReferenceForSeqLoadDEPRECATED(TR::Node* rootNode, int32_t tota
       }
    }
 
-bool isValidSeqLoadCombine(TR::Compilation* comp, int32_t combineNodeCount, TR::Node* combineNode, NodeForwardList* combineNodeList)
+bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNodeCount, TR::Node* combineNode, NodeForwardList* combineNodeList)
    {
    /* Accepts iadd, ior, ladd and lor nodes. */
    if ((combineNode->getOpCodeValue() != TR::iadd) && (combineNode->getOpCodeValue() != TR::ior) &&
@@ -733,31 +733,47 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, int32_t combineNodeCount, TR::
 
       switch (childOpCode)
          {
+         case TR::iadd:
+         case TR::ior:
+         case TR::ladd:
+         case TR::lor:
+            if (!isValidSeqLoadCombine(comp, trace, combineNodeCount, childrenArray[i], combineNodeList))
+               return false;
+            break;
+         default:
+            break;
+         }
+      }
+
+   for (int i = 0; i < 2; i++)
+      {
+      TR::ILOpCodes childOpCode = childrenArray[i]->getOpCodeValue();
+
+      switch (childOpCode)
+         {
          case TR::imul:
          case TR::ishl:
          case TR::lmul:
          case TR::lshl:
-            if (!isValidSeqLoadMulOrShl(comp, childrenArray[i]))
+            if (!isValidSeqLoadMulOrShl(comp, trace, childrenArray[i]))
                return false;
             break;
          case TR::iand:
          case TR::land:
-            if (!isValidSeqLoadAnd(comp, childrenArray[i]))
+            if (!isValidSeqLoadAnd(comp, trace, childrenArray[i]))
                return false;
             break;
          case TR::b2i:
          case TR::b2l:
          case TR::bu2i:
          case TR::bu2l:
-            if (!isValidSeqLoadByteConversion(comp, childrenArray[i]))
+            if (!isValidSeqLoadByteConversion(comp, trace, childrenArray[i]))
                return false;
             break;
          case TR::iadd:
          case TR::ior:
          case TR::ladd:
          case TR::lor:
-            if (!isValidSeqLoadCombine(comp, combineNodeCount, childrenArray[i], combineNodeList))
-               return false;
             break;
          default:
             return false;
@@ -767,7 +783,7 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, int32_t combineNodeCount, TR::
    return true;
    }
 
-bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode)
+bool isValidSeqLoadMulOrShl(TR::Compilation* comp, bool trace, TR::Node* mulOrShlNode)
    {
    /* Accepts imul, ishl, lmul and lshl nodes. */
    if ((mulOrShlNode->getOpCodeValue() != TR::imul) && (mulOrShlNode->getOpCodeValue() != TR::ishl) &&
@@ -789,14 +805,14 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode)
       {
       case TR::iand:
       case TR::land:
-         if (!isValidSeqLoadAnd(comp, firstChild))
+         if (!isValidSeqLoadAnd(comp, trace, firstChild))
             return false;
          break;
       case TR::b2i:
       case TR::b2l:
       case TR::bu2i:
       case TR::bu2l:
-         if (!isValidSeqLoadByteConversion(comp, firstChild))
+         if (!isValidSeqLoadByteConversion(comp, trace, firstChild))
             return false;
          break;
       default:
@@ -868,7 +884,7 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, TR::Node* mulOrShlNode)
    return true;
    }
 
-bool isValidSeqLoadAnd(TR::Compilation* comp, TR::Node* andNode)
+bool isValidSeqLoadAnd(TR::Compilation* comp, bool trace, TR::Node* andNode)
    {
    /* Accepts iand and land nodes. */
    if ((andNode->getOpCodeValue() != TR::iand) && (andNode->getOpCodeValue() != TR::land))
@@ -890,7 +906,7 @@ bool isValidSeqLoadAnd(TR::Compilation* comp, TR::Node* andNode)
       case TR::b2l:
       case TR::bu2i:
       case TR::bu2l:
-         if (!isValidSeqLoadByteConversion(comp, firstChild))
+         if (!isValidSeqLoadByteConversion(comp, trace, firstChild))
             return false;
          break;
       default:
@@ -919,7 +935,7 @@ bool isValidSeqLoadAnd(TR::Compilation* comp, TR::Node* andNode)
    return true;
    }
 
-bool isValidSeqLoadByteConversion(TR::Compilation* comp, TR::Node* conversionNode)
+bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* conversionNode)
    {
    /* Accepts b2i, b2l, bu2i and bu2l nodes. */
    if ((conversionNode->getOpCodeValue() != TR::b2i) && (conversionNode->getOpCodeValue() != TR::bu2i) &&
@@ -1834,7 +1850,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoadsDEPRECATED(TR::Compilati
    return currentTreeTop;
    }
 
-static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, TR::TreeTop* currentTreeTop, TR::Node* rootNode, NodeForwardList* combineNodeList)
+static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool trace, TR::TreeTop* currentTreeTop, TR::Node* rootNode, NodeForwardList* combineNodeList)
    {
    static const char * disableSeqLoadOpt = feGetEnv("TR_DisableSeqLoadOpt");
    if (disableSeqLoadOpt)
@@ -1862,7 +1878,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
                node = node->getFirstChild();
             if (node == bloadiNode)
                {
-               dumpOptDetails(comp, " Sequential Load to spine checked array not reducible\n");
+               traceMsg(comp, " Sequential Load to spine checked array not reducible\n");
                return currentTreeTop;
                }
             }
@@ -1889,6 +1905,8 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
    TR::Node* rootChildNode = NULL;
    TR::Node* disconnectedNode1 = NULL;
    TR::Node* disconnectedNode2 = NULL;
+
+   if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p\n", rootNode);
 
    for (int i = 0; i < 8; i++)
       {
@@ -1918,9 +1936,11 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
          }
       }
 
+   if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, byteCount: %d\n", rootNode, byteCount);
+
    if ((byteCount != 2) && (byteCount != 3) && (byteCount != 4) && (byteCount != 8))
       {
-      dumpOptDetails(comp, " Sequential Load of size other than 2/3/4/8 is not supported.\n");
+      if (trace) traceMsg(comp, "Sequential Load of size other than 2/3/4/8 is not supported. rootNode: %p, byteCount: %d\n", rootNode, byteCount);
       return currentTreeTop;
       }
 
@@ -1929,37 +1949,49 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
       TR::Node* byteConversionNode = NULL;
       int64_t multValue = 0;
 
+      if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, processedByteNodes[%d]: %p\n", rootNode, i, processedByteNodes[i]);
+
       if (0 == i)
          {
          aloadNode = getALoadReferenceForSeqLoad(processedByteNodes[i]);
+         if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, aloadNode: %p\n", rootNode, aloadNode);
          basePointerNode = getBasePointerReferenceForSeqLoad(processedByteNodes[i]);
+         if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, basePointerNode: %p\n", rootNode, basePointerNode);
          }
       else
          {
          if (aloadNode != getALoadReferenceForSeqLoad(processedByteNodes[i]))
             {
+            if (trace) traceMsg(comp, "Sequential Load Simplification aload mismatch. rootNode: %p, aloadNode(0): %p, aloadNode(%d): %p\n",
+                                rootNode, aloadNode, i, getALoadReferenceForSeqLoad(processedByteNodes[i]));
             return currentTreeTop;
             }
 
          if (basePointerNode != getBasePointerReferenceForSeqLoad(processedByteNodes[i]))
             {
+            if (trace) traceMsg(comp, "Sequential Load Simplification basePointerNode mismatch. rootNode: %p, basePointerNode(0): %p, basePointerNode(%d): %p\n",
+                                rootNode, basePointerNode, i, getBasePointerReferenceForSeqLoad(processedByteNodes[i]));
             return currentTreeTop;
             }
          }
 
       byteConversionNode = getByteConversionNodeForSeqLoad(processedByteNodes[i]);
+      if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, byteConversionNode: %p\n", rootNode, byteConversionNode);
       multValue = getMultValueForSeqLoad(processedByteNodes[i]);
+      if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, multValue: %ld\n", rootNode, multValue);
 
       if (1L << ((byteCount - 1) * 8) == multValue)
          {
          /* Check if most significant byte is signed extended or not. */
          signExtendResult = checkForSeqLoadSignExtendedByte(processedByteNodes[i]);
+         if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, signExtendResult: %d\n", rootNode, signExtendResult);
          }
       else
          {
          /* Other bytes can not be sign extended */
          if (checkForSeqLoadSignExtendedByte(processedByteNodes[i]))
             {
+            if (trace) traceMsg(comp, "Bytes other than the most significant byte should not be sign extended. rootNode: %p, processedByteNodes[%d]: %p\n", rootNode, i, processedByteNodes[i]);
             return currentTreeTop;
             }
          }
@@ -1968,52 +2000,94 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
          {
          case 0x1L:
             if (byteConversionNodes[0] != NULL)
+               {
+               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
+                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
                return currentTreeTop;
+               }
             byteConversionNodes[0] = byteConversionNode;
             byteOffset[0] = getOffsetForSeqLoad(comp, byteConversionNode);
             break;
          case 0x100L:
             if (byteConversionNodes[1] != NULL)
+               {
+               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
+                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
                return currentTreeTop;
+               }
             byteConversionNodes[1] = byteConversionNode;
             byteOffset[1] = getOffsetForSeqLoad(comp, byteConversionNode);
             break;
          case 0x10000L:
             if (byteConversionNodes[2] != NULL)
+               {
+               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
+                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
                return currentTreeTop;
+               }
             byteConversionNodes[2] = byteConversionNode;
             byteOffset[2] = getOffsetForSeqLoad(comp, byteConversionNode);
             break;
          case 0x1000000L:
             if (byteConversionNodes[3] != NULL)
+               {
+               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
+                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
                return currentTreeTop;
+               }
             byteConversionNodes[3] = byteConversionNode;
             byteOffset[3] = getOffsetForSeqLoad(comp, byteConversionNode);
          case 0x100000000L:
             if (byteConversionNodes[4] != NULL)
+               {
+               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
+                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
                return currentTreeTop;
+               }
             byteConversionNodes[4] = byteConversionNode;
             byteOffset[4] = getOffsetForSeqLoad(comp, byteConversionNode);
          case 0x10000000000L:
             if (byteConversionNodes[5] != NULL)
+               {
+               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
+                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
                return currentTreeTop;
+               }
             byteConversionNodes[5] = byteConversionNode;
             byteOffset[5] = getOffsetForSeqLoad(comp, byteConversionNode);
          case 0x1000000000000L:
             if (byteConversionNodes[6] != NULL)
+               {
+               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
+                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
                return currentTreeTop;
+               }
             byteConversionNodes[6] = byteConversionNode;
             byteOffset[6] = getOffsetForSeqLoad(comp, byteConversionNode);
          case 0x100000000000000L:
             if (byteConversionNodes[7] != NULL)
+               {
+               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
+                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
                return currentTreeTop;
+               }
             byteConversionNodes[7] = byteConversionNode;
             byteOffset[7] = getOffsetForSeqLoad(comp, byteConversionNode);
             break;
          default:
-            dumpOptDetails(comp, " Sequential Load check failed. Incompatible mulValue: %d, node: %p\n", multValue, processedByteNodes[i]);
+            if (trace) traceMsg(comp, "Sequential Load check failed. Incompatible mulValue: %d, node: %p\n", multValue, processedByteNodes[i]);
             return currentTreeTop;
          }
+      }
+
+   if (trace)
+      {
+      traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, byteOffset: %d", rootNode, byteOffset[0]);
+      for (int i = 1; i < byteCount; i++)
+         {
+         traceMsg(comp, ", %d", byteOffset[i]);
+         }
+      traceMsg(comp, "\n");
       }
 
    if (matchLittleEndianSeqLoadPattern(byteOffset, byteCount))
@@ -2039,18 +2113,24 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
       }
    else
       {
+      if (trace) traceMsg(comp, "byteOffset array does not match a big or little endian pattern. rootNode: %p\n", rootNode);
       return currentTreeTop;
       }
+
+   if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, %s\n", rootNode, littleEndianLoad ? "Little Endian Load" : "Big Endian Load");
+   if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, newConvertChildNode: %p, newLoadChildNode: %p\n", rootNode, newConvertChildNode, newLoadChildNode);
 
    //TODO: add reverse load support
    if (littleEndianLoad && !comp->target().cpu.isLittleEndian())
       {
+      if (trace) traceMsg(comp, "Little endian load on big endian target is not supported. rootNode: %p\n", rootNode);
       return currentTreeTop;
       }
 
    //TODO: add reverse load support
    if (!littleEndianLoad && comp->target().cpu.isLittleEndian())
       {
+      if (trace) traceMsg(comp, "Big endian load on little endian target is not supported. rootNode: %p\n", rootNode);
       return currentTreeTop;
       }
 
@@ -2059,7 +2139,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
       return currentTreeTop;
       }
 
-   dumpOptDetails(comp, " Sequential Load Second Pattern reduced at node: %p\n", rootNode);
+   traceMsg(comp, "Sequential Load Second Pattern reduced at rootNode: %p\n", rootNode);
 
    rootChildNode = rootNode->getFirstChild();
    disconnectedNode1 = rootChildNode->getFirstChild();
@@ -2070,47 +2150,63 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
       {
       if (4 == byteCount)
          {
+         if (trace) traceMsg(comp, "Recreating rootChildNode (%p) as iloadi.\n", rootChildNode);
          TR::Node::recreateWithSymRef(rootChildNode, TR::iloadi, newLoadChildNode->getSymbolReference());
          }
       else /* Handles the byteCount == 8 case. */
          {
+         if (trace) traceMsg(comp, "Recreating rootChildNode (%p) as lloadi.\n", rootChildNode);
          TR::Node::recreateWithSymRef(rootChildNode, TR::lloadi, newLoadChildNode->getSymbolReference());
          }
 
       rootChildNode->setNumChildren(1);
+
+      if (trace) traceMsg(comp, "Setting rootChildNode (%p) child to %p.\n", rootChildNode, newLoadChildNode->getFirstChild());
       rootChildNode->setAndIncChild(0, newLoadChildNode->getFirstChild());
       }
    else if (2 == byteCount)
       {
       if (signExtendResult)
          {
+         if (trace) traceMsg(comp, "Recreating rootChildNode (%p) as s2i.\n", rootChildNode);
          TR::Node::recreate(rootChildNode, TR::s2i);
          }
       else
          {
+         if (trace) traceMsg(comp, "Recreating rootChildNode (%p) as su2i.\n", rootChildNode);
          TR::Node::recreate(rootChildNode, TR::su2i);
          }
 
       rootChildNode->setNumChildren(1);
+
+      if (trace) traceMsg(comp, "Setting rootChildNode (%p) child to %p.\n", rootChildNode, newLoadChildNode);
       rootChildNode->setAndIncChild(0, newLoadChildNode);
+
+      if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as sloadi.\n", newLoadChildNode);
       TR::Node::recreate(newLoadChildNode, TR::sloadi);
       }
    else if (3 == byteCount)
       {
       TR::Node * mulNode = TR::Node::create(TR::imul, 2, newConvertChildNode, TR::Node::create(TR::iconst, 0, 256));
+      if (trace) traceMsg(comp, "Creating mulNode (%p) with children %p and %p.\n", mulNode, mulNode->getFirstChild(), mulNode->getSecondChild());
 
+      if (trace) traceMsg(comp, "Setting rootChildNode (%p) children to %p and %p.\n", rootChildNode, mulNode, byteConversionNodes[0]);
       rootChildNode->setAndIncChild(0, mulNode);
       rootChildNode->setAndIncChild(1, byteConversionNodes[0]);
 
+      if (trace) traceMsg(comp, "Recreating byteConversionNodes[0] (%p) as bu2i.\n", byteConversionNodes[0]);
       TR::Node::recreate(byteConversionNodes[0], TR::bu2i);
+      if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as sloadi.\n", newLoadChildNode);
       TR::Node::recreate(newLoadChildNode, TR::sloadi);
 
       if (signExtendResult)
          {
+         if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as s2i.\n", newConvertChildNode);
          TR::Node::recreate(newConvertChildNode, TR::s2i);
          }
       else
          {
+         if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as su2i.\n", newConvertChildNode);
          TR::Node::recreate(newConvertChildNode, TR::su2i);
          }
       }
@@ -3203,10 +3299,11 @@ static TR::TreeTop* generateArrayshiftFromSequentialStores(TR::Compilation * com
 int32_t TR_SequentialStoreSimplifier::perform()
    {
    //TODO: this disabled the opt on 64 bit Power. Need a workaround.
-   if (comp()->cg()->getSupportsAlignedAccessOnly() && comp()->cg()->supportsInternalPointers())
-      return 1; // temporary until we find a proper fix. Only PPC-64 should be affected.
+   //if (comp()->cg()->getSupportsAlignedAccessOnly() && comp()->cg()->supportsInternalPointers())
+      //return 1; // temporary until we find a proper fix. Only PPC-64 should be affected.
 
    bool newTempsCreated = false;
+   bool trace = comp()->trace(OMR::sequentialStoreSimplification);
 
    {
    TR::StackMemoryRegion stackMemoryRegion(*trMemory());
@@ -3238,9 +3335,9 @@ int32_t TR_SequentialStoreSimplifier::perform()
          while (currentNode->getNumChildren() >= 1)
             {
             combineNodeList->clear();
-            if (isValidSeqLoadCombine(comp(), 0, currentNode->getFirstChild(), combineNodeList))
+            if (isValidSeqLoadCombine(comp(), trace, 0, currentNode->getFirstChild(), combineNodeList))
                {
-               currentTree = generateArraycopyFromSequentialLoads(comp(), currentTree, currentNode, combineNodeList);
+               currentTree = generateArraycopyFromSequentialLoads(comp(), trace, currentTree, currentNode, combineNodeList);
                break;
                }
             currentNode = currentNode->getFirstChild();
