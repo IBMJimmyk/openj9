@@ -733,24 +733,6 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNod
 
       switch (childOpCode)
          {
-         case TR::iadd:
-         case TR::ior:
-         case TR::ladd:
-         case TR::lor:
-            if (!isValidSeqLoadCombine(comp, trace, combineNodeCount, childrenArray[i], combineNodeList))
-               return false;
-            break;
-         default:
-            break;
-         }
-      }
-
-   for (int i = 0; i < 2; i++)
-      {
-      TR::ILOpCodes childOpCode = childrenArray[i]->getOpCodeValue();
-
-      switch (childOpCode)
-         {
          case TR::imul:
          case TR::ishl:
          case TR::lmul:
@@ -774,6 +756,8 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNod
          case TR::ior:
          case TR::ladd:
          case TR::lor:
+            if (!isValidSeqLoadCombine(comp, trace, combineNodeCount, childrenArray[i], combineNodeList))
+               return false;
             break;
          default:
             return false;
@@ -1858,35 +1842,6 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
       return currentTreeTop;
       }
 
-   //TODO: fix the spine checks
-#if 0
-   /* Need to make sure these loads are not under spine checks. */
-   if (comp->requiresSpineChecks() && bloadiNode->getReferenceCount() > 1)
-      {
-      TR::TreeTop *tt = currentTreeTop;
-      TR::TreeTop *lastTreeTop = currentTreeTop->getEnclosingBlock()->startOfExtendedBlock()->getFirstRealTreeTop()->getPrevTreeTop();
-
-      /* Search backwards to the top of the EBB and look at all spine checks. */
-      while (tt != lastTreeTop)
-         {
-         TR::Node *node = tt->getNode();
-         if (node->getOpCodeValue() == TR::BNDCHKwithSpineCHK ||
-             node->getOpCodeValue() == TR::SpineCHK)
-            {
-            node = node->getFirstChild();
-            while (node->getOpCode().isConversion())
-               node = node->getFirstChild();
-            if (node == bloadiNode)
-               {
-               traceMsg(comp, " Sequential Load to spine checked array not reducible\n");
-               return currentTreeTop;
-               }
-            }
-         tt = tt->getPrevTreeTop();
-         }
-      }
-#endif
-
    TR::Node* processedByteNodes[8];
    TR::Node* byteConversionNodes[8];
    int32_t byteOffset[8];
@@ -1980,7 +1935,13 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
       multValue = getMultValueForSeqLoad(processedByteNodes[i]);
       if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, multValue: %ld\n", rootNode, multValue);
 
-      if (1L << ((byteCount - 1) * 8) == multValue)
+      if (multValue > (1L << ((byteCount - 1) * 8)))
+         {
+         if (trace) traceMsg(comp, "multValue is too high for the given byteCount. rootNode: %p, byteCount: %d, multValue: %ld\n", rootNode, byteCount, multValue);
+         return currentTreeTop;
+         }
+
+      if ((1L << ((byteCount - 1) * 8)) == multValue)
          {
          /* Check if most significant byte is signed extended or not. */
          signExtendResult = checkForSeqLoadSignExtendedByte(processedByteNodes[i]);
@@ -1996,87 +1957,29 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
             }
          }
 
-      switch (multValue)
+      for (int j = 0; j < byteCount; j++)
          {
-         case 0x1L:
-            if (byteConversionNodes[0] != NULL)
+         if ((1L << (j * 8)) == multValue)
+            {
+            if (byteConversionNodes[j] != NULL)
                {
-               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
-                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
+               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[%d]: %p, byteConversionNode(%d): %p\n",
+                                   rootNode, multValue, j, byteConversionNodes[j], i, byteConversionNode);
                return currentTreeTop;
                }
-            byteConversionNodes[0] = byteConversionNode;
-            byteOffset[0] = getOffsetForSeqLoad(comp, byteConversionNode);
+            byteConversionNodes[j] = byteConversionNode;
+            byteOffset[j] = getOffsetForSeqLoad(comp, byteConversionNode);
             break;
-         case 0x100L:
-            if (byteConversionNodes[1] != NULL)
-               {
-               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
-                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
-               return currentTreeTop;
-               }
-            byteConversionNodes[1] = byteConversionNode;
-            byteOffset[1] = getOffsetForSeqLoad(comp, byteConversionNode);
-            break;
-         case 0x10000L:
-            if (byteConversionNodes[2] != NULL)
-               {
-               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
-                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
-               return currentTreeTop;
-               }
-            byteConversionNodes[2] = byteConversionNode;
-            byteOffset[2] = getOffsetForSeqLoad(comp, byteConversionNode);
-            break;
-         case 0x1000000L:
-            if (byteConversionNodes[3] != NULL)
-               {
-               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
-                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
-               return currentTreeTop;
-               }
-            byteConversionNodes[3] = byteConversionNode;
-            byteOffset[3] = getOffsetForSeqLoad(comp, byteConversionNode);
-         case 0x100000000L:
-            if (byteConversionNodes[4] != NULL)
-               {
-               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
-                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
-               return currentTreeTop;
-               }
-            byteConversionNodes[4] = byteConversionNode;
-            byteOffset[4] = getOffsetForSeqLoad(comp, byteConversionNode);
-         case 0x10000000000L:
-            if (byteConversionNodes[5] != NULL)
-               {
-               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
-                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
-               return currentTreeTop;
-               }
-            byteConversionNodes[5] = byteConversionNode;
-            byteOffset[5] = getOffsetForSeqLoad(comp, byteConversionNode);
-         case 0x1000000000000L:
-            if (byteConversionNodes[6] != NULL)
-               {
-               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
-                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
-               return currentTreeTop;
-               }
-            byteConversionNodes[6] = byteConversionNode;
-            byteOffset[6] = getOffsetForSeqLoad(comp, byteConversionNode);
-         case 0x100000000000000L:
-            if (byteConversionNodes[7] != NULL)
-               {
-               if (trace) traceMsg(comp, "Duplicate multValue. rootNode: %p, multValue: %ld, byteConversionNodes[0]: %p, byteConversionNode(%d): %p\n",
-                                   rootNode, multValue, byteConversionNodes[0], i, byteConversionNode);
-               return currentTreeTop;
-               }
-            byteConversionNodes[7] = byteConversionNode;
-            byteOffset[7] = getOffsetForSeqLoad(comp, byteConversionNode);
-            break;
-         default:
-            if (trace) traceMsg(comp, "Sequential Load check failed. Incompatible mulValue: %d, node: %p\n", multValue, processedByteNodes[i]);
-            return currentTreeTop;
+            }
+         }
+      }
+
+   for (int i = 0; i < byteCount; i++)
+      {
+      if (byteConversionNodes[i] == NULL)
+         {
+         if (trace) traceMsg(comp, "Unexpected NULL byteConversionNode at index %d. rootNode: %p\n", i, rootNode);
+         return currentTreeTop;
          }
       }
 
@@ -2139,7 +2042,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
       return currentTreeTop;
       }
 
-   traceMsg(comp, "Sequential Load Second Pattern reduced at rootNode: %p\n", rootNode);
+   traceMsg(comp, "Sequential Load reduced at rootNode: %p\n", rootNode);
 
    rootChildNode = rootNode->getFirstChild();
    disconnectedNode1 = rootChildNode->getFirstChild();
@@ -3298,9 +3201,8 @@ static TR::TreeTop* generateArrayshiftFromSequentialStores(TR::Compilation * com
 
 int32_t TR_SequentialStoreSimplifier::perform()
    {
-   //TODO: this disabled the opt on 64 bit Power. Need a workaround.
-   //if (comp()->cg()->getSupportsAlignedAccessOnly() && comp()->cg()->supportsInternalPointers())
-      //return 1; // temporary until we find a proper fix. Only PPC-64 should be affected.
+   if (comp()->cg()->getSupportsAlignedAccessOnly() && comp()->cg()->supportsInternalPointers())
+      return 1; // temporary until we find a proper fix. Only PPC-64 should be affected.
 
    bool newTempsCreated = false;
    bool trace = comp()->trace(OMR::sequentialStoreSimplification);
