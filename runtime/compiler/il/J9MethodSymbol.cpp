@@ -197,6 +197,8 @@ static TR::RecognizedMethod canSkipNullChecks[] =
    TR::java_lang_String_init_int_String_int_String_String,
    TR::java_lang_String_init_int_int_char_boolean,
    TR::java_lang_String_split_str_int,
+   TR::java_nio_Bits_getIntL,
+   TR::java_nio_HeapByteBuffer__get,
    TR::java_nio_HeapByteBuffer_put,
    TR::unknownMethod
    };
@@ -280,6 +282,8 @@ static TR::RecognizedMethod canSkipBoundChecks[] =
    TR::java_util_HashMap_putImpl,
    TR::java_lang_String_init_int_String_int_String_String,
    TR::java_lang_String_init_int_int_char_boolean,
+   TR::java_nio_Bits_getIntL,
+   TR::java_nio_HeapByteBuffer__get,
    TR::java_nio_HeapByteBuffer_put,
    TR::unknownMethod
    };

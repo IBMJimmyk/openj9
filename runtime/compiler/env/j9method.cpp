@@ -2552,11 +2552,13 @@ void TR_ResolvedJ9Method::construct()
       {x(TR::java_nio_Bits_copyFromByteArray,          "copyFromByteArray",          "(Ljava/lang/Object;JJJ)V")},
       {x(TR::java_nio_Bits_keepAlive,                  "keepAlive",                  "(Ljava/lang/Object;)V")},
       {x(TR::java_nio_Bits_byteOrder,                  "byteOrder",                  "()Ljava/nio/ByteOrder;")},
+      {x(TR::java_nio_Bits_getIntL,                    "getIntL",                    "(Ljava/nio/ByteBuffer;I)I")},
       {  TR::unknownMethod}
       };
 
    static X HeapByteBufferMethods[] =
        {
+       {x(TR::java_nio_HeapByteBuffer__get,            "_get",                       "(I)B")},
        {x(TR::java_nio_HeapByteBuffer_put,             "put",                        "(IB)Ljava/nio/ByteBuffer;")},
        {  TR::unknownMethod}
        };

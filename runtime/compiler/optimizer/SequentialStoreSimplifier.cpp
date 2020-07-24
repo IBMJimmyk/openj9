@@ -959,7 +959,12 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
       secondChild = firstChild->getSecondChild();
       firstChild = firstChild->getFirstChild();
 
-      if ((firstChild->getOpCodeValue() != TR::aload) || (secondChild->getOpCodeValue() != TR::lsub))
+      if ((firstChild->getOpCodeValue() != TR::aload) && (firstChild->getOpCodeValue() != TR::aloadi))
+         {
+         return false;
+         }
+
+      if (secondChild->getOpCodeValue() != TR::lsub)
          {
          return false;
          }

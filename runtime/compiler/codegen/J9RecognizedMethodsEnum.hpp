@@ -241,7 +241,9 @@
    java_nio_Bits_copyFromByteArray,
    java_nio_Bits_keepAlive,
    java_nio_Bits_byteOrder,
+   java_nio_Bits_getIntL, //TODO: add the other get function? Maybe remove this one if not needed.
 
+   java_nio_HeapByteBuffer__get,
    java_nio_HeapByteBuffer_put,
 
    java_nio_ByteOrder_nativeOrder,
