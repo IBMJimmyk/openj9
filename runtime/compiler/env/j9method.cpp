@@ -2557,11 +2557,11 @@ void TR_ResolvedJ9Method::construct()
       };
 
    static X HeapByteBufferMethods[] =
-       {
-       {x(TR::java_nio_HeapByteBuffer__get,            "_get",                       "(I)B")},
-       {x(TR::java_nio_HeapByteBuffer_put,             "put",                        "(IB)Ljava/nio/ByteBuffer;")},
-       {  TR::unknownMethod}
-       };
+      {
+      {x(TR::java_nio_HeapByteBuffer__get,            "_get",                       "(I)B")},
+      {x(TR::java_nio_HeapByteBuffer_put,             "put",                        "(IB)Ljava/nio/ByteBuffer;")},
+      {  TR::unknownMethod}
+      };
 
    static X MathMethods[] =
       {

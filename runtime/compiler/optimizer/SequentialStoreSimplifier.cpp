@@ -2128,6 +2128,8 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
    disconnectedNode1->recursivelyDecReferenceCount();
    disconnectedNode2->recursivelyDecReferenceCount();
 
+   TR::DebugCounter::prependDebugCounter(comp, TR::DebugCounter::debugCounterName(comp, "sequentialStoreSimplification/generateArraycopyFromSequentialLoads/%s", comp->signature()), currentTreeTop);
+
    return currentTreeTop;
    }
 
@@ -3212,7 +3214,9 @@ static TR::TreeTop* generateArrayshiftFromSequentialStores(TR::Compilation * com
 
 int32_t TR_SequentialStoreSimplifier::perform()
    {
-   if (comp()->cg()->getSupportsAlignedAccessOnly() && comp()->cg()->supportsInternalPointers())
+   static bool forceSequentialStoreSimplifier = (feGetEnv("TR_ForceSequentialStoreSimplifier") != NULL);
+
+   if (!forceSequentialStoreSimplifier && comp()->cg()->getSupportsAlignedAccessOnly() && comp()->cg()->supportsInternalPointers())
       return 1; // temporary until we find a proper fix. Only PPC-64 should be affected.
 
    bool newTempsCreated = false;
