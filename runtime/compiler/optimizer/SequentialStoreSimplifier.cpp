@@ -69,10 +69,12 @@
 #define OPT_DETAILS "O^O SEQUENTIAL STORE TRANSFORMATION: "
 #define OPT_DETAILS_SCSS "O^O SCSS: "
 
+TR::TreeTop* seqLoadSearchAndCombine(TR::Compilation* comp, bool trace, TR_BitVector* visitedNodes, TR::TreeTop* currentTree, TR::Node* currentNode, NodeForwardList* combineNodeList);
 bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNodeCount, TR::Node* combineNode, NodeForwardList* combineNodeList);
 bool isValidSeqLoadMulOrShl(TR::Compilation* comp, bool trace, TR::Node* mulOrShlNode);
 bool isValidSeqLoadAnd(TR::Compilation* comp, bool trace, TR::Node* andNode);
 bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* conversionNode);
+TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool trace, TR::TreeTop* currentTreeTop, TR::Node* rootNode, NodeForwardList* combineNodeList);
 
 class TR_ShiftedValueTree
    {
@@ -680,6 +682,29 @@ TR::Node* getALoadReferenceForSeqLoadDEPRECATED(TR::Node* rootNode, int32_t tota
          return dummyNode->getSecondChild()->getFirstChild()->getFirstChild()->getFirstChild();
          }
       }
+   }
+
+TR::TreeTop* seqLoadSearchAndCombine(TR::Compilation* comp, bool trace, TR_BitVector* visitedNodes, TR::TreeTop* currentTree, TR::Node* currentNode, NodeForwardList* combineNodeList)
+   {
+   if (visitedNodes->isSet(currentNode->getGlobalIndex()))
+      return currentTree;
+
+   visitedNodes->set(currentNode->getGlobalIndex());
+
+   combineNodeList->clear();
+   if (isValidSeqLoadCombine(comp, trace, 0, currentNode, combineNodeList))
+      {
+      currentTree = generateArraycopyFromSequentialLoads(comp, trace, currentTree, currentNode, combineNodeList);
+      }
+   else
+      {
+      for (int i = 0; i < currentNode->getNumChildren(); i++)
+         {
+         currentTree = seqLoadSearchAndCombine(comp, trace, visitedNodes, currentTree, currentNode->getChild(i), combineNodeList);
+         }
+      }
+
+   return currentTree;
    }
 
 bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNodeCount, TR::Node* combineNode, NodeForwardList* combineNodeList)
@@ -1845,7 +1870,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoadsDEPRECATED(TR::Compilati
    return currentTreeTop;
    }
 
-static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool trace, TR::TreeTop* currentTreeTop, TR::Node* rootNode, NodeForwardList* combineNodeList)
+TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool trace, TR::TreeTop* currentTreeTop, TR::Node* rootNode, NodeForwardList* combineNodeList)
    {
    static const char * disableSeqLoadOpt = feGetEnv("TR_DisableSeqLoadOpt");
    if (disableSeqLoadOpt)
@@ -2055,7 +2080,7 @@ static TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, 
 
    traceMsg(comp, "Sequential Load reduced at rootNode: %p\n", rootNode);
 
-   rootChildNode = rootNode->getFirstChild();
+   rootChildNode = rootNode;  //TODO: rename rootChildNode as rootNode
    disconnectedNode1 = rootChildNode->getFirstChild();
    disconnectedNode2 = rootChildNode->getSecondChild();
 
@@ -3231,6 +3256,7 @@ int32_t TR_SequentialStoreSimplifier::perform()
    vcount_t visitCount1 = comp()->incOrResetVisitCount();
 
    NodeForwardList* combineNodeList = new (stackMemoryRegion) NodeForwardList(NodeForwardListAllocator(stackMemoryRegion));
+   TR_BitVector* visitedNodes = new (stackMemoryRegion) TR_BitVector(comp()->getNodeCount(), trMemory(), stackAlloc, growable);
 
    while (currentTree)
       {
@@ -3248,17 +3274,7 @@ int32_t TR_SequentialStoreSimplifier::perform()
       static bool useOldSeqLoadOpt = (feGetEnv("TR_UseOldSeqLoadOpt") != NULL);
       if (!useOldSeqLoadOpt)
          {
-         //TODO: see if I can make this initial search better.
-         while (currentNode->getNumChildren() >= 1)
-            {
-            combineNodeList->clear();
-            if (isValidSeqLoadCombine(comp(), trace, 0, currentNode->getFirstChild(), combineNodeList))
-               {
-               currentTree = generateArraycopyFromSequentialLoads(comp(), trace, currentTree, currentNode, combineNodeList);
-               break;
-               }
-            currentNode = currentNode->getFirstChild();
-            }
+         currentTree = seqLoadSearchAndCombine(comp(), trace, visitedNodes, currentTree, currentNode, combineNodeList);
          }
       else
          {
