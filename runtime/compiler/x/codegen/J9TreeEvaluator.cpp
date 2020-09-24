@@ -1160,6 +1160,39 @@ TR::Register *J9::X86::TreeEvaluator::monexitEvaluator(TR::Node *node, TR::CodeG
    return TR::TreeEvaluator::VMmonexitEvaluator(node, cg);
    }
 
+static TR::RegisterDependencyConditions *createConditionsAndPopulateVRFDeps(TR::CodeGenerator *cg, int32_t nonVSXDepsCount)
+   {
+   TR::RegisterDependencyConditions *conditions;
+   TR_LiveRegisters *lrVRF = cg->getLiveRegisters(TR_VRF);
+
+   bool liveVRFReg       = (!lrVRF    || (lrVRF->getNumberOfLiveRegisters() > 0));
+
+   //TODO: add support for preserved registers
+   //const TR::PPCLinkageProperties& properties = cg->getLinkage()->getProperties();    ///TODO: fix this
+   if (liveVRFReg)
+      {
+      int32_t depsCount = TR::RealRegister::NumXMMRegisters + nonVSXDepsCount;
+      conditions = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(depsCount, depsCount, cg->trMemory());
+      for (int32_t i = TR::RealRegister::FirstXMMR; i <= TR::RealRegister::LastXMMR; i++)
+         {
+         //if (!properties.getPreserved((TR::RealRegister::RegNum) i))
+            {
+            TR::Register *vreg = cg->allocateRegister(TR_VRF);
+            vreg->setPlaceholderReg();
+
+            conditions->addPreCondition(vreg, (TR::RealRegister::RegNum) i, cg);
+            conditions->addPostCondition(vreg, (TR::RealRegister::RegNum) i, cg);
+            }
+         }
+      }
+   else
+      {
+      conditions = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(nonVSXDepsCount, nonVSXDepsCount, cg->trMemory());
+      }
+
+   return conditions;
+   }
+
 TR::Register *J9::X86::TreeEvaluator::asynccheckEvaluator(TR::Node *node, TR::CodeGenerator *cg)
    {
    // Generate the test and branch for async message processing.
@@ -1199,6 +1232,7 @@ TR::Register *J9::X86::TreeEvaluator::asynccheckEvaluator(TR::Node *node, TR::Co
 
    TR::LabelSymbol *startControlFlowLabel = generateLabelSymbol(cg);
    TR::LabelSymbol *endControlFlowLabel = generateLabelSymbol(cg);
+   TR::RegisterDependencyConditions *dependencies = createConditionsAndPopulateVRFDeps(cg, 0);
 
    bool testIsEqual = compareNode->getOpCodeValue() == TR::icmpeq || compareNode->getOpCodeValue() == TR::lcmpeq;
 
@@ -1217,7 +1251,7 @@ TR::Register *J9::X86::TreeEvaluator::asynccheckEvaluator(TR::Node *node, TR::Co
    }
 
    endControlFlowLabel->setEndInternalControlFlow();
-   generateLabelInstruction(LABEL, node, endControlFlowLabel, cg);
+   generateLabelInstruction(LABEL, node, endControlFlowLabel, dependencies, cg);
 
    cg->decReferenceCount(compareNode);
 
