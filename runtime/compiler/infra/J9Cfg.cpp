@@ -116,7 +116,7 @@ static bool hasJProfilingInfo(TR::Compilation *comp, TR::CFG *cfg)
 bool
 J9::CFG::setFrequencies()
    {
-   static bool ignoreRecompInfo = (feGetEnv("TR_ignoreRecompInfo") != NULL);
+   static bool ignoreRecompInfo = (feGetEnv("TR_UseRecompInfo") == NULL) && (!comp()->getOption(TR_UseRecompInfo));
 
    if (this == comp()->getFlowGraph() && (!comp()->getRecompilationInfo() || ignoreRecompInfo))
       {
