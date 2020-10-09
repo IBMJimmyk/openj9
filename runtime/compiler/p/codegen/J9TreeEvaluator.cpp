@@ -103,19 +103,38 @@ static TR::RegisterDependencyConditions *createConditionsAndPopulateVSXDeps(TR::
    {
    TR::RegisterDependencyConditions *conditions;
    TR_LiveRegisters *lrVector = cg->getLiveRegisters(TR_VSX_VECTOR);
+   TR_LiveRegisters *lrScalar = cg->getLiveRegisters(TR_VSX_SCALAR);
+   TR_LiveRegisters *lrVRF = cg->getLiveRegisters(TR_VRF);
+
    bool liveVSXVectorReg = (!lrVector || (lrVector->getNumberOfLiveRegisters() > 0));
+   bool liveVSXScalarReg = (!lrScalar || (lrScalar->getNumberOfLiveRegisters() > 0));
+   bool liveVRFReg       = (!lrVRF    || (lrVRF->getNumberOfLiveRegisters() > 0));
+
    const TR::PPCLinkageProperties& properties = cg->getLinkage()->getProperties();
-   if (liveVSXVectorReg)
+
+   if (liveVSXVectorReg || liveVSXScalarReg)
       {
       int32_t depsCount = 64 + nonVSXDepsCount;
       conditions = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(depsCount, depsCount, cg->trMemory());
+
       for (int32_t i = TR::RealRegister::FirstFPR; i <= TR::RealRegister::LastFPR; i++)
+         {
+         TR::addDependency(conditions, NULL, (TR::RealRegister::RegNum) i, TR_FPR, cg);
+         }
+
+      for (int32_t i = TR::RealRegister::FirstVRF; i <= TR::RealRegister::LastVRF; i++)
          {
          if (!properties.getPreserved((TR::RealRegister::RegNum) i))
             {
-            TR::addDependency(conditions, NULL, (TR::RealRegister::RegNum) i, TR_FPR, cg);
+            TR::addDependency(conditions, NULL, (TR::RealRegister::RegNum) i, TR_VRF, cg);
             }
          }
+      }
+   else if (liveVRFReg)
+      {
+      int32_t depsCount = 32 + nonVSXDepsCount;
+      conditions = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(depsCount, depsCount, cg->trMemory());
+
       for (int32_t i = TR::RealRegister::FirstVRF; i <= TR::RealRegister::LastVRF; i++)
          {
          if (!properties.getPreserved((TR::RealRegister::RegNum) i))
@@ -126,24 +145,9 @@ static TR::RegisterDependencyConditions *createConditionsAndPopulateVSXDeps(TR::
       }
    else
       {
-      TR_LiveRegisters *lrScalar = cg->getLiveRegisters(TR_VSX_SCALAR);
-      if (!lrScalar || (lrScalar->getNumberOfLiveRegisters() > 0))
-         {
-         int32_t depsCount = 32 + nonVSXDepsCount;
-         conditions = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(depsCount, depsCount, cg->trMemory());
-         for (int32_t i = TR::RealRegister::FirstVRF; i <= TR::RealRegister::LastVRF; i++)
-            {
-            if (!properties.getPreserved((TR::RealRegister::RegNum) i))
-               {
-               TR::addDependency(conditions, NULL, (TR::RealRegister::RegNum) i, TR_VRF, cg);
-               }
-            }
-         }
-      else
-         {
-         conditions = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(nonVSXDepsCount, nonVSXDepsCount, cg->trMemory());
-         }
+      conditions = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(nonVSXDepsCount, nonVSXDepsCount, cg->trMemory());
       }
+
    return conditions;
    }
 
