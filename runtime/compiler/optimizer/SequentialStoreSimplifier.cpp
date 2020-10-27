@@ -1887,7 +1887,6 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
    TR::Node* newLoadChildNode = NULL;
    TR::Node* newConvertChildNode = NULL;
 
-   TR::Node* rootChildNode = NULL;
    TR::Node* disconnectedNode1 = NULL;
    TR::Node* disconnectedNode2 = NULL;
 
@@ -2074,46 +2073,45 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
 
    traceMsg(comp, "Sequential Load reduced at rootNode: %p\n", rootNode);
 
-   rootChildNode = rootNode;  //TODO: rename rootChildNode as rootNode
-   disconnectedNode1 = rootChildNode->getFirstChild();
-   disconnectedNode2 = rootChildNode->getSecondChild();
+   disconnectedNode1 = rootNode->getFirstChild();
+   disconnectedNode2 = rootNode->getSecondChild();
 
    //TODO: add reverse load support.
    if ((4 == byteCount) || (8 == byteCount))
       {
       if (4 == byteCount)
          {
-         if (trace) traceMsg(comp, "Recreating rootChildNode (%p) as iloadi.\n", rootChildNode);
-         TR::Node::recreateWithSymRef(rootChildNode, TR::iloadi, newLoadChildNode->getSymbolReference());
+         if (trace) traceMsg(comp, "Recreating rootNode (%p) as iloadi.\n", rootNode);
+         TR::Node::recreateWithSymRef(rootNode, TR::iloadi, newLoadChildNode->getSymbolReference());
          }
       else /* Handles the byteCount == 8 case. */
          {
-         if (trace) traceMsg(comp, "Recreating rootChildNode (%p) as lloadi.\n", rootChildNode);
-         TR::Node::recreateWithSymRef(rootChildNode, TR::lloadi, newLoadChildNode->getSymbolReference());
+         if (trace) traceMsg(comp, "Recreating rootNode (%p) as lloadi.\n", rootNode);
+         TR::Node::recreateWithSymRef(rootNode, TR::lloadi, newLoadChildNode->getSymbolReference());
          }
 
-      rootChildNode->setNumChildren(1);
+      rootNode->setNumChildren(1);
 
-      if (trace) traceMsg(comp, "Setting rootChildNode (%p) child to %p.\n", rootChildNode, newLoadChildNode->getFirstChild());
-      rootChildNode->setAndIncChild(0, newLoadChildNode->getFirstChild());
+      if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, newLoadChildNode->getFirstChild());
+      rootNode->setAndIncChild(0, newLoadChildNode->getFirstChild());
       }
    else if (2 == byteCount)
       {
       if (signExtendResult)
          {
-         if (trace) traceMsg(comp, "Recreating rootChildNode (%p) as s2i.\n", rootChildNode);
-         TR::Node::recreate(rootChildNode, TR::s2i);
+         if (trace) traceMsg(comp, "Recreating rootNode (%p) as s2i.\n", rootNode);
+         TR::Node::recreate(rootNode, TR::s2i);
          }
       else
          {
-         if (trace) traceMsg(comp, "Recreating rootChildNode (%p) as su2i.\n", rootChildNode);
-         TR::Node::recreate(rootChildNode, TR::su2i);
+         if (trace) traceMsg(comp, "Recreating rootNode (%p) as su2i.\n", rootNode);
+         TR::Node::recreate(rootNode, TR::su2i);
          }
 
-      rootChildNode->setNumChildren(1);
+      rootNode->setNumChildren(1);
 
-      if (trace) traceMsg(comp, "Setting rootChildNode (%p) child to %p.\n", rootChildNode, newLoadChildNode);
-      rootChildNode->setAndIncChild(0, newLoadChildNode);
+      if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, newLoadChildNode);
+      rootNode->setAndIncChild(0, newLoadChildNode);
 
       if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as sloadi.\n", newLoadChildNode);
       TR::Node::recreate(newLoadChildNode, TR::sloadi);
@@ -2123,9 +2121,9 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       TR::Node * mulNode = TR::Node::create(TR::imul, 2, newConvertChildNode, TR::Node::create(TR::iconst, 0, 256));
       if (trace) traceMsg(comp, "Creating mulNode (%p) with children %p and %p.\n", mulNode, mulNode->getFirstChild(), mulNode->getSecondChild());
 
-      if (trace) traceMsg(comp, "Setting rootChildNode (%p) children to %p and %p.\n", rootChildNode, mulNode, byteConversionNodes[0]);
-      rootChildNode->setAndIncChild(0, mulNode);
-      rootChildNode->setAndIncChild(1, byteConversionNodes[0]);
+      if (trace) traceMsg(comp, "Setting rootNode (%p) children to %p and %p.\n", rootNode, mulNode, byteConversionNodes[0]);
+      rootNode->setAndIncChild(0, mulNode);
+      rootNode->setAndIncChild(1, byteConversionNodes[0]);
 
       if (trace) traceMsg(comp, "Recreating byteConversionNodes[0] (%p) as bu2i.\n", byteConversionNodes[0]);
       TR::Node::recreate(byteConversionNodes[0], TR::bu2i);
@@ -3235,8 +3233,12 @@ int32_t TR_SequentialStoreSimplifier::perform()
    {
    static bool forceSequentialStoreSimplifier = (feGetEnv("TR_ForceSequentialStoreSimplifier") != NULL);
 
+   /*
+    * SupportsAlignedAccessOnly is currently only set for Power 7 and earlier and also LE Power 8. It is not set for Power 9 and onward
+    * and also not set for BE Power 8 and non-Power platforms.
+    */
    if (!forceSequentialStoreSimplifier && comp()->cg()->getSupportsAlignedAccessOnly() && comp()->cg()->supportsInternalPointers())
-      return 1; // temporary until we find a proper fix. Only PPC-64 should be affected.
+      return 1;
 
    bool newTempsCreated = false;
    bool trace = comp()->trace(OMR::sequentialStoreSimplification);
