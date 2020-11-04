@@ -875,7 +875,7 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, bool trace, TR::Node* mulOrSh
       }
    else /* mulOrShlNode->getOpCodeValue() == TR::lshl */
       {
-      switch (secondChild->getLongInt())
+      switch (secondChild->getInt())
          {
          case 8:
          case 16:
@@ -962,12 +962,7 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
    TR::Node* firstChild = conversionNode->getFirstChild();
    TR::Node* secondChild = NULL;
 
-   if (firstChild->getOpCodeValue() != TR::bloadi)
-      {
-      return false;
-      }
-
-   if (firstChild->getReferenceCount() > 1)
+   if ((firstChild->getOpCodeValue() != TR::bloadi) || (firstChild->getReferenceCount() > 1))
       {
       return false;
       }
@@ -976,7 +971,7 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
 
    if (comp->target().is64Bit())
       {
-      if (firstChild->getOpCodeValue() != TR::aladd)
+      if ((firstChild->getOpCodeValue() != TR::aladd) || (firstChild->getReferenceCount() > 1))
          {
          return false;
          }
@@ -989,7 +984,7 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
          return false;
          }
 
-      if (secondChild->getOpCodeValue() != TR::lsub)
+      if ((secondChild->getOpCodeValue() != TR::lsub) || (secondChild->getReferenceCount() > 1))
          {
          return false;
          }
@@ -1003,7 +998,7 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
       }
    else
       {
-      if (firstChild->getOpCodeValue() != TR::aiadd)
+      if ((firstChild->getOpCodeValue() != TR::aiadd) || (firstChild->getReferenceCount() > 1))
          {
          return false;
          }
@@ -1011,7 +1006,12 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
       secondChild = firstChild->getSecondChild();
       firstChild = firstChild->getFirstChild();
 
-      if ((firstChild->getOpCodeValue() != TR::aload) || (secondChild->getOpCodeValue() != TR::isub))
+      if ((firstChild->getOpCodeValue() != TR::aload) && (firstChild->getOpCodeValue() != TR::aloadi))
+         {
+         return false;
+         }
+
+      if ((secondChild->getOpCodeValue() != TR::isub) || (secondChild->getReferenceCount() > 1))
          {
          return false;
          }
@@ -1085,14 +1085,12 @@ int64_t getMultValueForSeqLoad(TR::Node* inputNode)
       case TR::imul:
          multValue = inputNode->getSecondChild()->getInt();
          break;
-      case TR::ishl:
-         multValue = 1L << (inputNode->getSecondChild()->getInt());
-         break;
       case TR::lmul:
          multValue = inputNode->getSecondChild()->getLongInt();
          break;
+      case TR::ishl:
       case TR::lshl:
-         multValue = 1L << (inputNode->getSecondChild()->getLongInt());
+         multValue = 1L << (inputNode->getSecondChild()->getInt());
          break;
       case TR::b2i:
       case TR::b2l:
@@ -1883,6 +1881,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
 
    bool signExtendResult = false;
    bool littleEndianLoad = false;
+   bool is64bitResult = rootNode->getDataType().isInt64();
 
    TR::Node* newLoadChildNode = NULL;
    TR::Node* newConvertChildNode = NULL;
@@ -2077,14 +2076,14 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
    disconnectedNode2 = rootNode->getSecondChild();
 
    //TODO: add reverse load support.
-   if ((4 == byteCount) || (8 == byteCount))
+   if (((4 == byteCount) && !is64bitResult) || (8 == byteCount))
       {
       if (4 == byteCount)
          {
          if (trace) traceMsg(comp, "Recreating rootNode (%p) as iloadi.\n", rootNode);
          TR::Node::recreateWithSymRef(rootNode, TR::iloadi, newLoadChildNode->getSymbolReference());
          }
-      else /* Handles the byteCount == 8 case. */
+      else /* Handles the (8 == byteCount) case. */
          {
          if (trace) traceMsg(comp, "Recreating rootNode (%p) as lloadi.\n", rootNode);
          TR::Node::recreateWithSymRef(rootNode, TR::lloadi, newLoadChildNode->getSymbolReference());
@@ -2095,17 +2094,54 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, newLoadChildNode->getFirstChild());
       rootNode->setAndIncChild(0, newLoadChildNode->getFirstChild());
       }
+   else if (4 == byteCount) /* is64bitResult must be true if this case is reached */
+      {
+      if (signExtendResult)
+         {
+         if (trace) traceMsg(comp, "Recreating rootNode (%p) as i2l.\n", rootNode);
+         TR::Node::recreate(rootNode, TR::i2l);
+         }
+      else
+         {
+         if (trace) traceMsg(comp, "Recreating rootNode (%p) as iu2l.\n", rootNode);
+         TR::Node::recreate(rootNode, TR::iu2l);
+         }
+
+      rootNode->setNumChildren(1);
+
+      if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, newLoadChildNode);
+      rootNode->setAndIncChild(0, newLoadChildNode);
+
+      if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as iloadi.\n", newLoadChildNode);
+      TR::Node::recreate(newLoadChildNode, TR::iloadi);
+      }
    else if (2 == byteCount)
       {
       if (signExtendResult)
          {
-         if (trace) traceMsg(comp, "Recreating rootNode (%p) as s2i.\n", rootNode);
-         TR::Node::recreate(rootNode, TR::s2i);
+         if (is64bitResult)
+            {
+            if (trace) traceMsg(comp, "Recreating rootNode (%p) as s2l.\n", rootNode);
+            TR::Node::recreate(rootNode, TR::s2l);
+            }
+         else
+            {
+            if (trace) traceMsg(comp, "Recreating rootNode (%p) as s2i.\n", rootNode);
+            TR::Node::recreate(rootNode, TR::s2i);
+            }
          }
       else
          {
-         if (trace) traceMsg(comp, "Recreating rootNode (%p) as su2i.\n", rootNode);
-         TR::Node::recreate(rootNode, TR::su2i);
+         if (is64bitResult)
+            {
+            if (trace) traceMsg(comp, "Recreating rootNode (%p) as su2l.\n", rootNode);
+            TR::Node::recreate(rootNode, TR::su2l);
+            }
+         else
+            {
+            if (trace) traceMsg(comp, "Recreating rootNode (%p) as su2i.\n", rootNode);
+            TR::Node::recreate(rootNode, TR::su2i);
+            }
          }
 
       rootNode->setNumChildren(1);
@@ -2118,27 +2154,59 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       }
    else if (3 == byteCount)
       {
-      TR::Node * mulNode = TR::Node::create(TR::imul, 2, newConvertChildNode, TR::Node::create(TR::iconst, 0, 256));
+      TR::Node * mulNode;
+      if (is64bitResult)
+         {
+         mulNode = TR::Node::create(TR::lmul, 2, newConvertChildNode, TR::Node::create(TR::lconst, 0, 256));
+         }
+      else
+         {
+         mulNode = TR::Node::create(TR::imul, 2, newConvertChildNode, TR::Node::create(TR::iconst, 0, 256));
+         }
       if (trace) traceMsg(comp, "Creating mulNode (%p) with children %p and %p.\n", mulNode, mulNode->getFirstChild(), mulNode->getSecondChild());
 
       if (trace) traceMsg(comp, "Setting rootNode (%p) children to %p and %p.\n", rootNode, mulNode, byteConversionNodes[0]);
       rootNode->setAndIncChild(0, mulNode);
       rootNode->setAndIncChild(1, byteConversionNodes[0]);
 
-      if (trace) traceMsg(comp, "Recreating byteConversionNodes[0] (%p) as bu2i.\n", byteConversionNodes[0]);
-      TR::Node::recreate(byteConversionNodes[0], TR::bu2i);
+      if (is64bitResult)
+         {
+         if (trace) traceMsg(comp, "Recreating byteConversionNodes[0] (%p) as bu2l.\n", byteConversionNodes[0]);
+         TR::Node::recreate(byteConversionNodes[0], TR::bu2l);
+         }
+      else
+         {
+         if (trace) traceMsg(comp, "Recreating byteConversionNodes[0] (%p) as bu2i.\n", byteConversionNodes[0]);
+         TR::Node::recreate(byteConversionNodes[0], TR::bu2i);
+         }
       if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as sloadi.\n", newLoadChildNode);
       TR::Node::recreate(newLoadChildNode, TR::sloadi);
 
       if (signExtendResult)
          {
-         if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as s2i.\n", newConvertChildNode);
-         TR::Node::recreate(newConvertChildNode, TR::s2i);
+         if (is64bitResult)
+            {
+            if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as s2l.\n", newConvertChildNode);
+            TR::Node::recreate(newConvertChildNode, TR::s2l);
+            }
+         else
+            {
+            if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as s2i.\n", newConvertChildNode);
+            TR::Node::recreate(newConvertChildNode, TR::s2i);
+            }
          }
       else
          {
-         if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as su2i.\n", newConvertChildNode);
-         TR::Node::recreate(newConvertChildNode, TR::su2i);
+         if (is64bitResult)
+            {
+            if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as su2l.\n", newConvertChildNode);
+            TR::Node::recreate(newConvertChildNode, TR::su2l);
+            }
+         else
+            {
+            if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as su2i.\n", newConvertChildNode);
+            TR::Node::recreate(newConvertChildNode, TR::su2i);
+            }
          }
       }
 
