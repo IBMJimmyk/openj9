@@ -984,16 +984,31 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
          return false;
          }
 
-      if ((secondChild->getOpCodeValue() != TR::lsub) || (secondChild->getReferenceCount() > 1))
+      if (secondChild->getReferenceCount() > 1)
          {
-         return false;
+         if (secondChild->getOpCodeValue() != TR::lconst)
+            {
+            return false;
+            }
          }
-
-      secondChild = secondChild->getSecondChild();
+      else
+         {
+         if ((secondChild->getOpCodeValue() != TR::lconst) &&
+             (secondChild->getOpCodeValue() != TR::ladd)   &&
+             (secondChild->getOpCodeValue() != TR::lsub))
+            {
+            return false;
+            }
+         }
 
       if (secondChild->getOpCodeValue() != TR::lconst)
          {
-         return false;
+         secondChild = secondChild->getSecondChild();
+
+         if (secondChild->getOpCodeValue() != TR::lconst)
+            {
+            return false;
+            }
          }
       }
    else
@@ -1011,32 +1026,71 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
          return false;
          }
 
-      if ((secondChild->getOpCodeValue() != TR::isub) || (secondChild->getReferenceCount() > 1))
+      if (secondChild->getReferenceCount() > 1)
          {
-         return false;
+         if (secondChild->getOpCodeValue() != TR::iconst)
+            {
+            return false;
+            }
          }
-
-      secondChild = secondChild->getSecondChild();
+      else
+         {
+         if ((secondChild->getOpCodeValue() != TR::iconst) &&
+             (secondChild->getOpCodeValue() != TR::iadd)   &&
+             (secondChild->getOpCodeValue() != TR::isub))
+            {
+            return false;
+            }
+         }
 
       if (secondChild->getOpCodeValue() != TR::iconst)
          {
-         return false;
+         secondChild = secondChild->getSecondChild();
+
+         if (secondChild->getOpCodeValue() != TR::iconst)
+            {
+            return false;
+            }
          }
       }
 
    return true;
    }
 
-int32_t getOffsetForSeqLoad(TR::Compilation* comp, TR::Node* byteConversionNode)
+int64_t getOffsetForSeqLoad(TR::Compilation* comp, TR::Node* byteConversionNode)
    {
    /* Accepts b2i, b2l, bu2i and bu2l nodes. */
+   TR::Node* displacementNode = byteConversionNode->getFirstChild()->getFirstChild()->getSecondChild();
+
    if (comp->target().is64Bit())
       {
-      return byteConversionNode->getFirstChild()->getFirstChild()->getSecondChild()->getSecondChild()->getLongInt() * -1;
+      if (displacementNode->getOpCodeValue() == TR::lconst)
+         {
+         return displacementNode->getLongInt();
+         }
+      else if (displacementNode->getOpCodeValue() == TR::lsub)
+         {
+         return displacementNode->getSecondChild()->getLongInt() * -1;
+         }
+      else //displacementNode->getOpCodeValue() == TR::ladd
+         {
+         return displacementNode->getSecondChild()->getLongInt();
+         }
       }
    else
       {
-      return byteConversionNode->getFirstChild()->getFirstChild()->getSecondChild()->getSecondChild()->getInt() * -1;
+      if (displacementNode->getOpCodeValue() == TR::iconst)
+         {
+         return displacementNode->getInt();
+         }
+      else if (displacementNode->getOpCodeValue() == TR::isub)
+         {
+         return displacementNode->getSecondChild()->getInt() * -1;
+         }
+      else //displacementNode->getOpCodeValue() == TR::iadd
+         {
+         return displacementNode->getSecondChild()->getInt();
+         }
       }
    }
 
@@ -1047,6 +1101,7 @@ TR::Node* getBasePointerReferenceForSeqLoad(TR::Node* inputNode)
     * Combine nodes are the add and or instructions that construct the longer value out of seperate loaded bytes.
     */
    TR::Node* basePointerNode = NULL;
+   TR::Node* displacementNode = NULL;
 
    switch (inputNode->getOpCodeValue())
       {
@@ -1062,7 +1117,13 @@ TR::Node* getBasePointerReferenceForSeqLoad(TR::Node* inputNode)
       case TR::b2l:
       case TR::bu2i:
       case TR::bu2l:
-         basePointerNode = inputNode->getFirstChild()->getFirstChild()->getSecondChild()->getFirstChild()->skipConversions();
+         displacementNode = inputNode->getFirstChild()->getFirstChild()->getSecondChild();
+         if ((displacementNode->getOpCodeValue() == TR::iconst) || (displacementNode->getOpCodeValue() == TR::lconst))
+            {
+            basePointerNode = NULL;
+            break;
+            }
+         basePointerNode = displacementNode->getFirstChild()->skipConversions();
          break;
       default:
          TR_ASSERT_FATAL_WITH_NODE(inputNode, 0, "Unsupported opCode. This should have been caught earlier. inputNode: %p.", inputNode);
@@ -1206,9 +1267,9 @@ bool checkForSeqLoadSignExtendedByte(TR::Node* inputNode)
    return signExtendedByte;
    }
 
-bool matchLittleEndianSeqLoadPattern(int32_t byteOffset[], int32_t byteCount)
+bool matchLittleEndianSeqLoadPattern(int64_t byteOffset[], int32_t byteCount)
    {
-   int32_t currentByteOffset = byteOffset[0];
+   int64_t currentByteOffset = byteOffset[0];
 
    for (int i = 1; i < byteCount; i++)
       {
@@ -1222,9 +1283,9 @@ bool matchLittleEndianSeqLoadPattern(int32_t byteOffset[], int32_t byteCount)
    return true;
    }
 
-bool matchBigEndianSeqLoadPattern(int32_t byteOffset[], int32_t byteCount)
+bool matchBigEndianSeqLoadPattern(int64_t byteOffset[], int32_t byteCount)
    {
-   int32_t currentByteOffset = byteOffset[0];
+   int64_t currentByteOffset = byteOffset[0];
 
    for (int i = 1; i < byteCount; i++)
       {
@@ -1872,7 +1933,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
 
    TR::Node* processedByteNodes[8];
    TR::Node* byteConversionNodes[8];
-   int32_t byteOffset[8];
+   int64_t byteOffset[8];
 
    int32_t byteCount = 0;
 
@@ -2013,10 +2074,10 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
 
    if (trace)
       {
-      traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, byteOffset: %d", rootNode, byteOffset[0]);
+      traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, byteOffset: %ld", rootNode, byteOffset[0]);
       for (int i = 1; i < byteCount; i++)
          {
-         traceMsg(comp, ", %d", byteOffset[i]);
+         traceMsg(comp, ", %ld", byteOffset[i]);
          }
       traceMsg(comp, "\n");
       }
