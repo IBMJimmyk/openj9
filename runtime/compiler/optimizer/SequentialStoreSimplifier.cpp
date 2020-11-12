@@ -2141,7 +2141,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
    /*
     * This is an example transformation. 4 consective byte loads from a byte array are used to construct an int.
     * After the transformation a Little Endian int load is used to directly create the int.
-    * Big Endian has support as well but the bytes in the original array need to be in the opposite order.
+    * Big Endian has support as well but the bytes in the original array need to be in the opposite order or a byteswap is used.
     *
     * Original trees:
     * n01n  iadd         <<-- rootNode, combineNode (2)
@@ -2215,6 +2215,8 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
    bool littleEndianLoad = false;
    /* Tracks if the final loaded result is an int or a long. */
    bool is64bitResult = rootNode->getDataType().isInt64();
+   /* Tracks if the final loaded result needs a byteswap due to endianness differences. */
+   bool swapBytes = false;
 
    /* These are used to track nodes while performing the transformation. */
    TR::Node* newLoadChildNode = NULL;
@@ -2403,18 +2405,23 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
    if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, %s\n", rootNode, littleEndianLoad ? "Little Endian Load" : "Big Endian Load");
    if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, newConvertChildNode: %p, newLoadChildNode: %p\n", rootNode, newConvertChildNode, newLoadChildNode);
 
-   //TODO: add byte reverse support
    if (littleEndianLoad && !comp->target().cpu.isLittleEndian())
       {
-      if (trace) traceMsg(comp, "Little endian load on big endian target is not supported. rootNode: %p\n", rootNode);
-      return currentTreeTop;
+      if (!comp->cg()->supportsByteswap())
+         {
+         if (trace) traceMsg(comp, "Little endian load on big endian target without byteswap is not supported. rootNode: %p\n", rootNode);
+         return currentTreeTop;
+         }
+      swapBytes = true;
       }
-
-   //TODO: add byte reverse support
-   if (!littleEndianLoad && comp->target().cpu.isLittleEndian())
+   else if (!littleEndianLoad && comp->target().cpu.isLittleEndian())
       {
-      if (trace) traceMsg(comp, "Big endian load on little endian target is not supported. rootNode: %p\n", rootNode);
-      return currentTreeTop;
+      if (!comp->cg()->supportsByteswap())
+         {
+         if (trace) traceMsg(comp, "Big endian load on little endian target without byteswap is not supported. rootNode: %p\n", rootNode);
+         return currentTreeTop;
+         }
+      swapBytes = true;
       }
 
    if (!performTransformation(comp, "%sReducing sequential loads\n", OPT_DETAILS))
@@ -2428,8 +2435,9 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
    disconnectedNode1 = rootNode->getFirstChild();
    disconnectedNode2 = rootNode->getSecondChild();
 
-   //TODO: add reverse load support.
-   if (((4 == byteCount) && !is64bitResult) || (8 == byteCount))
+   if (((4 == byteCount) && !swapBytes && !is64bitResult) ||
+       ((8 == byteCount) && !swapBytes)
+      )
       {
       if (4 == byteCount)
          {
@@ -2447,23 +2455,62 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, newLoadChildNode->getFirstChild());
       rootNode->setAndIncChild(0, newLoadChildNode->getFirstChild());
       }
-   else if (4 == byteCount) /* is64bitResult must be true if this case is reached */
+   else if (8 == byteCount) /* swapBytes must be true here. */
       {
-      if (signExtendResult)
-         {
-         if (trace) traceMsg(comp, "Recreating rootNode (%p) as i2l.\n", rootNode);
-         TR::Node::recreate(rootNode, TR::i2l);
-         }
-      else
-         {
-         if (trace) traceMsg(comp, "Recreating rootNode (%p) as iu2l.\n", rootNode);
-         TR::Node::recreate(rootNode, TR::iu2l);
-         }
+      /* This case handles adding a byteswap. */
+      if (trace) traceMsg(comp, "Recreating rootNode (%p) as lbyteswap.\n", rootNode);
+      TR::Node::recreate(rootNode, TR::lbyteswap);
 
       rootNode->setNumChildren(1);
 
       if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, newLoadChildNode);
       rootNode->setAndIncChild(0, newLoadChildNode);
+
+      if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as lloadi.\n", newLoadChildNode);
+      TR::Node::recreate(newLoadChildNode, TR::lloadi);
+      }
+   else if (4 == byteCount)
+      {
+      /* This case handles adding a data width conversion or byteswap. */
+      if (is64bitResult)
+         {
+         if (signExtendResult)
+            {
+            if (trace) traceMsg(comp, "Recreating rootNode (%p) as i2l.\n", rootNode);
+            TR::Node::recreate(rootNode, TR::i2l);
+            }
+         else
+            {
+            if (trace) traceMsg(comp, "Recreating rootNode (%p) as iu2l.\n", rootNode);
+            TR::Node::recreate(rootNode, TR::iu2l);
+            }
+
+         rootNode->setNumChildren(1);
+
+         if (!swapBytes)
+            {
+            if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, newLoadChildNode);
+            rootNode->setAndIncChild(0, newLoadChildNode);
+            }
+         else
+            {
+            TR::Node * ibyteswapNode = TR::Node::create(TR::ibyteswap, 1, newLoadChildNode);
+            if (trace) traceMsg(comp, "Creating ibyteswapNode (%p) with child %p.\n", ibyteswapNode, ibyteswapNode->getFirstChild());
+
+            if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, ibyteswapNode);
+            rootNode->setAndIncChild(0, ibyteswapNode);
+            }
+         }
+      else /* Handles the (swapBytes && !is64bitResult) case */
+         {
+         if (trace) traceMsg(comp, "Recreating rootNode (%p) as ibyteswap.\n", rootNode);
+         TR::Node::recreate(rootNode, TR::ibyteswap);
+
+         rootNode->setNumChildren(1);
+
+         if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, newLoadChildNode);
+         rootNode->setAndIncChild(0, newLoadChildNode);
+         }
 
       if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as iloadi.\n", newLoadChildNode);
       TR::Node::recreate(newLoadChildNode, TR::iloadi);
@@ -2499,8 +2546,19 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
 
       rootNode->setNumChildren(1);
 
-      if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, newLoadChildNode);
-      rootNode->setAndIncChild(0, newLoadChildNode);
+      if (!swapBytes)
+         {
+         if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, newLoadChildNode);
+         rootNode->setAndIncChild(0, newLoadChildNode);
+         }
+      else
+         {
+         TR::Node * sbyteswapNode = TR::Node::create(TR::sbyteswap, 1, newLoadChildNode);
+         if (trace) traceMsg(comp, "Creating sbyteswapNode (%p) with child %p.\n", sbyteswapNode, sbyteswapNode->getFirstChild());
+
+         if (trace) traceMsg(comp, "Setting rootNode (%p) child to %p.\n", rootNode, sbyteswapNode);
+         rootNode->setAndIncChild(0, sbyteswapNode);
+         }
 
       if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as sloadi.\n", newLoadChildNode);
       TR::Node::recreate(newLoadChildNode, TR::sloadi);
@@ -2513,7 +2571,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
        * The second is a byte load.
        * The two values are combined to get the final 3 byte value.
        */
-      TR::Node * mulNode;
+      TR::Node * mulNode = NULL;
       if (is64bitResult)
          {
          mulNode = TR::Node::create(TR::lmul, 2, newConvertChildNode, TR::Node::create(TR::lconst, 0, 256));
@@ -2538,6 +2596,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
          if (trace) traceMsg(comp, "Recreating byteConversionNodes[0] (%p) as bu2i.\n", byteConversionNodes[0]);
          TR::Node::recreate(byteConversionNodes[0], TR::bu2i);
          }
+
       if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as sloadi.\n", newLoadChildNode);
       TR::Node::recreate(newLoadChildNode, TR::sloadi);
 
@@ -2567,6 +2626,20 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
             TR::Node::recreate(newConvertChildNode, TR::su2i);
             }
          }
+
+      if (swapBytes)
+         {
+         TR::Node * sbyteswapNode = TR::Node::create(TR::sbyteswap, 1, newLoadChildNode);
+         if (trace) traceMsg(comp, "Creating sbyteswapNode (%p) with child %p.\n", sbyteswapNode, sbyteswapNode->getFirstChild());
+
+         if (trace) traceMsg(comp, "Setting newConvertChildNode (%p) child to %p.\n", newConvertChildNode, sbyteswapNode);
+         newConvertChildNode->setAndIncChild(0, sbyteswapNode);
+         newLoadChildNode->recursivelyDecReferenceCount();
+         }
+      }
+   else
+      {
+      TR_ASSERT_FATAL_WITH_NODE(rootNode, 0, "Unexpected code path during generateArraycopyFromSequentialLoads transformation. rootNode: %p.", rootNode);
       }
 
    disconnectedNode1->recursivelyDecReferenceCount();
