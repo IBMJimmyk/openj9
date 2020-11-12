@@ -580,9 +580,6 @@ const OptimizationStrategy sequentialLoadAndStoreWarmOpts[] =
 
 const OptimizationStrategy sequentialStoreSimplificationOpts[] =
    {
-   //{ OMR::localCSE                             }, //common up lit pool refs in the same block
-   //{ OMR::globalDeadStoreElimination           },
-   //{ OMR::deadTreesElimination                 }, // cleanup at the end
    { OMR::treeSimplification                   },
    { OMR::sequentialStoreSimplification        },
    { OMR::treeSimplification                   }, // might fold expressions created by versioning/induction variables

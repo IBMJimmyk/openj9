@@ -70,7 +70,7 @@
 #define OPT_DETAILS_SCSS "O^O SCSS: "
 
 TR::TreeTop* seqLoadSearchAndCombine(TR::Compilation* comp, bool trace, TR_BitVector* visitedNodes, TR::TreeTop* currentTree, TR::Node* currentNode, NodeForwardList* combineNodeList);
-bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNodeCount, TR::Node* combineNode, NodeForwardList* combineNodeList);
+bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, TR::Node* combineNode, NodeForwardList* combineNodeList, int32_t &combineNodeCount);
 bool isValidSeqLoadMulOrShl(TR::Compilation* comp, bool trace, TR::Node* mulOrShlNode);
 bool isValidSeqLoadAnd(TR::Compilation* comp, bool trace, TR::Node* andNode);
 bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* conversionNode);
@@ -691,13 +691,27 @@ TR::TreeTop* seqLoadSearchAndCombine(TR::Compilation* comp, bool trace, TR_BitVe
 
    visitedNodes->set(currentNode->getGlobalIndex());
 
+   /*
+    * Combine nodes are the "add" and "or" nodes that construct the longer value out of several loaded bytes.
+    * combineNodeList keeps tracks of the nodes used to construct one particular value. It is populated by isValidSeqLoadCombine.
+    * combineNodeList needs to be cleared each time before it is repopulated.
+    * isValidSeqLoadCombine also performs a series of initial checks to see if the tree structure contains the pattern
+    * of byte loads that can be combined into wider loads.
+    * combineNodeCount tracks the number of combine nodes.
+    */
    combineNodeList->clear();
-   if (isValidSeqLoadCombine(comp, trace, 0, currentNode, combineNodeList))
+   int32_t combineNodeCount = 0;
+   if (isValidSeqLoadCombine(comp, trace, currentNode, combineNodeList, combineNodeCount))
       {
+      /*
+       * The initial tree structure seems good at this point. generateArraycopyFromSequentialLoads will do some other
+       * checks. If they also pass, it will combine the byte loads into wider loads.
+       */
       currentTree = generateArraycopyFromSequentialLoads(comp, trace, currentTree, currentNode, combineNodeList);
       }
    else
       {
+      /* If the checks in isValidSeqLoadCombine fail, try again on the children. */
       for (int i = 0; i < currentNode->getNumChildren(); i++)
          {
          currentTree = seqLoadSearchAndCombine(comp, trace, visitedNodes, currentTree, currentNode->getChild(i), combineNodeList);
@@ -707,9 +721,11 @@ TR::TreeTop* seqLoadSearchAndCombine(TR::Compilation* comp, bool trace, TR_BitVe
    return currentTree;
    }
 
-bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNodeCount, TR::Node* combineNode, NodeForwardList* combineNodeList)
+bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, TR::Node* combineNode, NodeForwardList* combineNodeList, int32_t &combineNodeCount)
    {
-   /* Accepts iadd, ior, ladd and lor nodes. */
+   /* Combine nodes are the "add" and "or" nodes that construct the longer value out of several loaded bytes. */
+
+   /* Check if the candidate combine node is: iadd, ior, ladd, lor */
    if ((combineNode->getOpCodeValue() != TR::iadd) && (combineNode->getOpCodeValue() != TR::ior) &&
        (combineNode->getOpCodeValue() != TR::ladd) && (combineNode->getOpCodeValue() != TR::lor)
       )
@@ -717,14 +733,24 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNod
       return false;
       }
 
-   if (combineNodeCount > 0 && combineNode->getReferenceCount() > 1)
+   /*
+    * Only the highest combine node (the first one to be looked at) can have a reference count greater than 1.
+    * If not, it means the intermediate values when constructing the larger value are used in other places and still
+    * needs to be generated.
+    */
+   if ((combineNodeCount > 0) && (combineNode->getReferenceCount() != 1))
       {
       return false;
       }
 
+   /* The node being looked at is a potential combine node so it gets added to the list */
    combineNodeList->push_front(combineNode);
    combineNodeCount++;
 
+   /*
+    * If int width combine nodes are being used, no more than 4 bytes can be combined which means no more than 3 combine nodes.
+    * If long width combine nodes are being used, no more than 8 bytes can be combined which means no more than 7 combine nodes.
+    */
    if ((combineNodeCount > 3) && ((combineNode->getOpCodeValue() == TR::iadd) || (combineNode->getOpCodeValue() == TR::ior)))
       {
       return false;
@@ -738,7 +764,8 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNod
    childrenArray[0] = combineNode->getFirstChild();
    childrenArray[1] = combineNode->getSecondChild();
 
-   if (((childrenArray[0]->getOpCodeValue() == TR::iadd) || (childrenArray[0]->getOpCodeValue() == TR::ior)) &&
+   //TODO: remove this if not needed anymore
+   /*if (((childrenArray[0]->getOpCodeValue() == TR::iadd) || (childrenArray[0]->getOpCodeValue() == TR::ior)) &&
        ((childrenArray[1]->getOpCodeValue() == TR::iadd) || (childrenArray[1]->getOpCodeValue() == TR::ior))
       )
       {
@@ -750,8 +777,15 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNod
       )
       {
       return false;
-      }
+      }*/
 
+   /*
+    * Check if the children match the pattern for combining byte loads.
+    * There is an optional mul/shl layer.
+    * There is an optional and layer.
+    * The byte conversion nodes are the ones on the path to the byte loads.
+    * The child can also be another combine node (add/or).
+    */
    for (int i = 0; i < 2; i++)
       {
       TR::ILOpCodes childOpCode = childrenArray[i]->getOpCodeValue();
@@ -781,7 +815,7 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNod
          case TR::ior:
          case TR::ladd:
          case TR::lor:
-            if (!isValidSeqLoadCombine(comp, trace, combineNodeCount, childrenArray[i], combineNodeList))
+            if (!isValidSeqLoadCombine(comp, trace, childrenArray[i], combineNodeList, combineNodeCount))
                return false;
             break;
          default:
@@ -794,7 +828,7 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, int32_t combineNod
 
 bool isValidSeqLoadMulOrShl(TR::Compilation* comp, bool trace, TR::Node* mulOrShlNode)
    {
-   /* Accepts imul, ishl, lmul and lshl nodes. */
+   /* Confirm that the input mulOrShlNode is one of: imul, ishl, lmul, lshl */
    if ((mulOrShlNode->getOpCodeValue() != TR::imul) && (mulOrShlNode->getOpCodeValue() != TR::ishl) &&
        (mulOrShlNode->getOpCodeValue() != TR::lmul) && (mulOrShlNode->getOpCodeValue() != TR::lshl)
       )
@@ -802,7 +836,11 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, bool trace, TR::Node* mulOrSh
       return false;
       }
 
-   if (mulOrShlNode->getReferenceCount() > 1)
+   /*
+    * mulOrShlNode must have a refCount of 1. After the transformation the intermediate value generated by this node
+    * won't be calculated. If the value is needed for something else, the transformation needs to bail out here.
+    */
+   if (mulOrShlNode->getReferenceCount() != 1)
       {
       return false;
       }
@@ -810,6 +848,11 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, bool trace, TR::Node* mulOrSh
    TR::Node* firstChild = mulOrShlNode->getFirstChild();
    TR::Node* secondChild = mulOrShlNode->getSecondChild();
 
+   /*
+    * Check if the first child matches the pattern.
+    * There is an optional and layer.
+    * The byte conversion nodes are the ones on the path to the byte loads.
+    */
    switch (firstChild->getOpCodeValue())
       {
       case TR::iand:
@@ -828,6 +871,10 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, bool trace, TR::Node* mulOrSh
          return false;
       }
 
+   /*
+    * The second child must a const node and only certain values are valid.
+    * These values correspond with the constants needed to shift a load byte left by multiples of 8 bits.
+    */
    if ((secondChild->getOpCodeValue() != TR::iconst) && (secondChild->getOpCodeValue() != TR::lconst))
       {
       return false;
@@ -895,13 +942,17 @@ bool isValidSeqLoadMulOrShl(TR::Compilation* comp, bool trace, TR::Node* mulOrSh
 
 bool isValidSeqLoadAnd(TR::Compilation* comp, bool trace, TR::Node* andNode)
    {
-   /* Accepts iand and land nodes. */
+   /* Confirm that the input andNode is one of: iand, land */
    if ((andNode->getOpCodeValue() != TR::iand) && (andNode->getOpCodeValue() != TR::land))
       {
       return false;
       }
 
-   if (andNode->getReferenceCount() > 1)
+   /*
+    * andNode must have a refCount of 1. After the transformation the intermediate value generated by this node
+    * won't be calculated. If the value is needed for something else, the transformation needs to bail out here.
+    */
+   if (andNode->getReferenceCount() != 1)
       {
       return false;
       }
@@ -909,6 +960,10 @@ bool isValidSeqLoadAnd(TR::Compilation* comp, bool trace, TR::Node* andNode)
    TR::Node* firstChild = andNode->getFirstChild();
    TR::Node* secondChild = andNode->getSecondChild();
 
+   /*
+    * Check if the first child matches the pattern.
+    * The byte conversion nodes are the ones on the path to the byte loads.
+    */
    switch (firstChild->getOpCodeValue())
       {
       case TR::b2i:
@@ -922,6 +977,11 @@ bool isValidSeqLoadAnd(TR::Compilation* comp, bool trace, TR::Node* andNode)
          return false;
       }
 
+   /*
+    * The second child must a const node and only 0xFF is valid.
+    * This node is supposed to act as a mask so that only 8 bits are affected when this is added with the other
+    * loaded bytes.
+    */
    if (secondChild->getOpCodeValue() == TR::iconst)
       {
       if (secondChild->getInt() != 0xFF)
@@ -946,7 +1006,18 @@ bool isValidSeqLoadAnd(TR::Compilation* comp, bool trace, TR::Node* andNode)
 
 bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* conversionNode)
    {
-   /* Accepts b2i, b2l, bu2i and bu2l nodes. */
+   /*
+    * Example tree:
+    * b2i        <--- conversionNode
+    *   bloadi
+    *     aladd
+    *       aload/aloadi
+    *       lsub/ladd
+    *         **basePointerNode**
+    *         lconst
+    */
+
+   /* Confirm that the input conversionNode is one of: b2i, b2l, bu2i, bu2l */
    if ((conversionNode->getOpCodeValue() != TR::b2i) && (conversionNode->getOpCodeValue() != TR::bu2i) &&
        (conversionNode->getOpCodeValue() != TR::b2l) && (conversionNode->getOpCodeValue() != TR::bu2l)
       )
@@ -954,7 +1025,11 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
       return false;
       }
 
-   if (conversionNode->getReferenceCount() > 1)
+   /*
+    * conversionNode must have a refCount of 1. After the transformation the intermediate value generated by this node
+    * won't be calculated. If the value is needed for something else, the transformation needs to bail out here.
+    */
+   if (conversionNode->getReferenceCount() != 1)
       {
       return false;
       }
@@ -962,7 +1037,11 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
    TR::Node* firstChild = conversionNode->getFirstChild();
    TR::Node* secondChild = NULL;
 
-   if ((firstChild->getOpCodeValue() != TR::bloadi) || (firstChild->getReferenceCount() > 1))
+   /*
+    * conversionNode's child must be a bloadi with a refcount of 1. After the transformation the intermediate value generated by this node
+    * won't be calculated. If the value is needed for something else, the transformation needs to bail out here.
+    */
+   if ((firstChild->getOpCodeValue() != TR::bloadi) || (firstChild->getReferenceCount() != 1))
       {
       return false;
       }
@@ -971,7 +1050,11 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
 
    if (comp->target().is64Bit())
       {
-      if ((firstChild->getOpCodeValue() != TR::aladd) || (firstChild->getReferenceCount() > 1))
+      /*
+       * Under 64bit, bloadi's child must be an aladd node. Some of the aladd nodes go away after the transformation.
+       * So, if the refCount is not 1, bail out here.
+       */
+      if ((firstChild->getOpCodeValue() != TR::aladd) || (firstChild->getReferenceCount() != 1))
          {
          return false;
          }
@@ -979,12 +1062,17 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
       secondChild = firstChild->getSecondChild();
       firstChild = firstChild->getFirstChild();
 
+      /* aladd's first child can be aload or aloadi. This load is kept so there is no refcount restriction. */
       if ((firstChild->getOpCodeValue() != TR::aload) && (firstChild->getOpCodeValue() != TR::aloadi))
          {
          return false;
          }
 
-      if (secondChild->getReferenceCount() > 1)
+      /*
+       * aladd's second child can be an lconst, ladd or lsub. The ladd or lsub might go away after transformation
+       * so they must have a refCount of 1.
+       */
+      if (secondChild->getReferenceCount() != 1)
          {
          if (secondChild->getOpCodeValue() != TR::lconst)
             {
@@ -1001,6 +1089,7 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
             }
          }
 
+      /* If the second child is lsub or ladd, make sure that node's second child is an lconst. */
       if (secondChild->getOpCodeValue() != TR::lconst)
          {
          secondChild = secondChild->getSecondChild();
@@ -1013,7 +1102,11 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
       }
    else
       {
-      if ((firstChild->getOpCodeValue() != TR::aiadd) || (firstChild->getReferenceCount() > 1))
+      /*
+       * Under 32bit, bloadi's child must be an aiadd node. Some of the aiadd nodes go away after the transformation.
+       * So, if the refCount is not 1, bail out here.
+       */
+      if ((firstChild->getOpCodeValue() != TR::aiadd) || (firstChild->getReferenceCount() != 1))
          {
          return false;
          }
@@ -1021,12 +1114,17 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
       secondChild = firstChild->getSecondChild();
       firstChild = firstChild->getFirstChild();
 
+      /* aiadd's first child can be aload or aloadi. This load is kept so there is no refcount restriction. */
       if ((firstChild->getOpCodeValue() != TR::aload) && (firstChild->getOpCodeValue() != TR::aloadi))
          {
          return false;
          }
 
-      if (secondChild->getReferenceCount() > 1)
+      /*
+       * aiadd's second child can be an iconst, iadd or isub. The iadd or isub might go away after transformation
+       * so they must have a refCount of 1.
+       */
+      if (secondChild->getReferenceCount() != 1)
          {
          if (secondChild->getOpCodeValue() != TR::iconst)
             {
@@ -1043,6 +1141,7 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
             }
          }
 
+      /* If the second child is isub or iadd, make sure that node's second child is an iconst. */
       if (secondChild->getOpCodeValue() != TR::iconst)
          {
          secondChild = secondChild->getSecondChild();
@@ -1059,7 +1158,29 @@ bool isValidSeqLoadByteConversion(TR::Compilation* comp, bool trace, TR::Node* c
 
 int64_t getOffsetForSeqLoad(TR::Compilation* comp, TR::Node* byteConversionNode)
    {
-   /* Accepts b2i, b2l, bu2i and bu2l nodes. */
+   /*
+    * Returns the constant offset from basePointerNode. Offset from 0 if there is no basePointerNode.
+    * byteConversionNode must be: b2i, b2l, bu2i, bu2l
+    *
+    * Example tree: (sub/add version)
+    * b2i        <--- byteConversionNode
+    *   bloadi
+    *     aladd
+    *       aload/aloadi
+    *       lsub/ladd     <<--- displacementNode
+    *         **basePointerNode**
+    *         lconst      <<--- return value
+    *
+    *
+    * Example tree: (const version)
+    * b2i        <--- byteConversionNode
+    *   bloadi
+    *     aladd
+    *       aload/aloadi
+    *       lconst        <<--- displacementNode, return value
+    */
+
+
    TR::Node* displacementNode = byteConversionNode->getFirstChild()->getFirstChild()->getSecondChild();
 
    if (comp->target().is64Bit())
@@ -1097,9 +1218,29 @@ int64_t getOffsetForSeqLoad(TR::Compilation* comp, TR::Node* byteConversionNode)
 TR::Node* getBasePointerReferenceForSeqLoad(TR::Node* inputNode)
    {
    /*
-    * Accepts children of combine nodes that are not also combine nodes.
-    * Combine nodes are the add and or instructions that construct the longer value out of seperate loaded bytes.
+    * Returns the constant offset from basePointerNode. Offset from 0 if there is no basePointerNode.
+    * inputNode is a child of a combine node that is not also a combine node.
+    * Combine nodes are the add/or nodes that construct the longer value out of seperate loaded bytes.
+    *
+    * Example tree: (sub/add version)
+    * b2i        <--- inputNode
+    *   bloadi
+    *     aladd
+    *       aload/aloadi
+    *       lsub/ladd     <<--- displacementNode
+    *         **basePointerNode**  <<--- basePointerNode (search down past any conversion nodes, if any)
+    *         lconst
+    *
+    *
+    * Example tree: (const version)
+    * b2i        <--- inputNode
+    *   bloadi
+    *     aladd
+    *       aload/aloadi
+    *       lconst        <<--- displacementNode, return NULL
     */
+
+
    TR::Node* basePointerNode = NULL;
    TR::Node* displacementNode = NULL;
 
@@ -1111,6 +1252,7 @@ TR::Node* getBasePointerReferenceForSeqLoad(TR::Node* inputNode)
       case TR::land:
       case TR::lmul:
       case TR::lshl:
+         /* Keep searching down for the b2i node. */
          basePointerNode = getBasePointerReferenceForSeqLoad(inputNode->getFirstChild());
          break;
       case TR::b2i:
@@ -1136,9 +1278,15 @@ TR::Node* getBasePointerReferenceForSeqLoad(TR::Node* inputNode)
 int64_t getMultValueForSeqLoad(TR::Node* inputNode)
    {
    /*
-    * Accepts children of combine nodes that are not also combine nodes.
-    * Combine nodes are the add and or instructions that construct the longer value out of seperate loaded bytes.
+    * Returns the value a byte is multiplied by before being combined with the other bytes.
+    * If inputNode is a mul node, return the const on the second child.
+    * If it is a shl node instead, the shift value is converted to a mul value before being returned.
+    * If it is not mul or shift, the multValue is 1.
+    *
+    * inputNode is a child of a combine node that is not also a combine node.
+    * Combine nodes are the add/or nodes that construct the longer value out of seperate loaded bytes.
     */
+
    int64_t multValue = 0;
 
    switch (inputNode->getOpCodeValue())
@@ -1172,9 +1320,21 @@ int64_t getMultValueForSeqLoad(TR::Node* inputNode)
 TR::Node* getALoadReferenceForSeqLoad(TR::Node* inputNode)
    {
    /*
-    * Accepts children of combine nodes that are not also combine nodes.
-    * Combine nodes are the add and or instructions that construct the longer value out of seperate loaded bytes.
+    * Returns the node that loads the address of the byte array.
+    * inputNode is a child of a combine node that is not also a combine node.
+    * Combine nodes are the add/or nodes that construct the longer value out of seperate loaded bytes.
+    *
+    * Example tree:
+    * b2i        <--- inputNode
+    *   bloadi
+    *     aladd
+    *       aload/aloadi  <<--- aloadNode
+    *       lsub/ladd
+    *         **basePointerNode**
+    *         lconst
     */
+
+
    TR::Node* aloadNode = NULL;
 
    switch (inputNode->getOpCodeValue())
@@ -1185,6 +1345,7 @@ TR::Node* getALoadReferenceForSeqLoad(TR::Node* inputNode)
       case TR::land:
       case TR::lmul:
       case TR::lshl:
+         /* Keep searching down for the b2i node. */
          aloadNode = getALoadReferenceForSeqLoad(inputNode->getFirstChild());
          break;
       case TR::b2i:
@@ -1204,9 +1365,21 @@ TR::Node* getALoadReferenceForSeqLoad(TR::Node* inputNode)
 TR::Node* getByteConversionNodeForSeqLoad(TR::Node* inputNode)
    {
    /*
-    * Accepts children of combine nodes that are not also combine nodes.
-    * Combine nodes are the add and or instructions that construct the longer value out of seperate loaded bytes.
+    * Returns the byte conversion node.
+    * inputNode is a child of a combine node that is not also a combine node.
+    * Combine nodes are the add/or nodes that construct the longer value out of seperate loaded bytes.
+    *
+    * Example tree:
+    * b2i        <--- inputNode, byteConversionNode
+    *   bloadi
+    *     aladd
+    *       aload/aloadi
+    *       lsub/ladd
+    *         **basePointerNode**
+    *         lconst
     */
+
+
    TR::Node* byteConversionNode = NULL;
 
    switch (inputNode->getOpCodeValue())
@@ -1217,6 +1390,7 @@ TR::Node* getByteConversionNodeForSeqLoad(TR::Node* inputNode)
       case TR::land:
       case TR::lmul:
       case TR::lshl:
+         /* Keep searching down for the b2i node. */
          byteConversionNode = getByteConversionNodeForSeqLoad(inputNode->getFirstChild());
          break;
       case TR::b2i:
@@ -1236,8 +1410,26 @@ TR::Node* getByteConversionNodeForSeqLoad(TR::Node* inputNode)
 bool checkForSeqLoadSignExtendedByte(TR::Node* inputNode)
    {
    /*
-    * Accepts children of combine nodes that are not also combine nodes.
-    * Combine nodes are the add and or instructions that construct the longer value out of seperate loaded bytes.
+    * Checked if the loaded byte needs to be sign extended or not.
+    * If bu2i/bu2l nodes are used, the loaded byte is unsigned.
+    * If iand/land nodes are used, the loaded byte was masked with 0xFF and is treated as unsigned.
+    * If b2i/b2l nodes are used, the loaded byte is signed. If it is the most significant byte, it will need to
+    * be sign extended later. If it isn't the most significant byte, the transformation will bail out since the
+    * sign bits may interfere with the other loaded bytes.
+    *
+    * inputNode is a child of a combine node that is not also a combine node.
+    * Combine nodes are the add/or nodes that construct the longer value out of seperate loaded bytes.
+    *
+    * Example tree:
+    * iand     <--- inputNode
+    *   b2i
+    *     bloadi
+    *       aladd
+    *         aload/aloadi
+    *         lsub/ladd
+    *           **basePointerNode**
+    *           lconst
+    *   iconst 0xFF
     */
    bool signExtendedByte = false;
 
@@ -1247,6 +1439,7 @@ bool checkForSeqLoadSignExtendedByte(TR::Node* inputNode)
       case TR::ishl:
       case TR::lmul:
       case TR::lshl:
+         /* Keep searching down for the b2i/and node. */
          signExtendedByte = checkForSeqLoadSignExtendedByte(inputNode->getFirstChild());
          break;
       case TR::bu2i:
@@ -1267,33 +1460,47 @@ bool checkForSeqLoadSignExtendedByte(TR::Node* inputNode)
    return signExtendedByte;
    }
 
-bool matchLittleEndianSeqLoadPattern(int64_t byteOffset[], int32_t byteCount)
+bool matchLittleEndianSeqLoadPattern(int64_t byteOffsets[], int32_t byteCount)
    {
-   int64_t currentByteOffset = byteOffset[0];
+   /*
+    * byteOffsets array contains relative locations that each byte is loaded from.
+    * byteCount is the total number of bytes.
+    * byteOffsets[0] is the offset of the lowest significant byte.
+    * byteOffsets[byteCount-1] is the offset of the highest significant byte.
+    * To be an LE load, the offset needs to go UP by exactly 1 when going from 0 to (byteCount-1).
+    */
+   int64_t currentByteOffset = byteOffsets[0];
 
    for (int i = 1; i < byteCount; i++)
       {
-      if (byteOffset[i] != (currentByteOffset + 1))
+      if (byteOffsets[i] != (currentByteOffset + 1))
          {
          return false;
          }
-      currentByteOffset = byteOffset[i];
+      currentByteOffset = byteOffsets[i];
       }
 
    return true;
    }
 
-bool matchBigEndianSeqLoadPattern(int64_t byteOffset[], int32_t byteCount)
+bool matchBigEndianSeqLoadPattern(int64_t byteOffsets[], int32_t byteCount)
    {
-   int64_t currentByteOffset = byteOffset[0];
+   /*
+    * byteOffsets array contains relative locations that each byte is loaded from.
+    * byteCount is the total number of bytes.
+    * byteOffsets[0] is the offset of the lowest significant byte.
+    * byteOffsets[byteCount-1] is the offset of the highest significant byte.
+    * To be an BE load, the offset needs to go DOWN by exactly 1 when going from 0 to (byteCount-1).
+    */
+   int64_t currentByteOffset = byteOffsets[0];
 
    for (int i = 1; i < byteCount; i++)
       {
-      if (byteOffset[i] != (currentByteOffset - 1))
+      if (byteOffsets[i] != (currentByteOffset - 1))
          {
          return false;
          }
-      currentByteOffset = byteOffset[i];
+      currentByteOffset = byteOffsets[i];
       }
 
    return true;
@@ -1931,22 +2138,87 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       return currentTreeTop;
       }
 
-   TR::Node* processedByteNodes[8];
-   TR::Node* byteConversionNodes[8];
-   int64_t byteOffset[8];
+   /*
+    * This is an example transformation. 4 consective byte loads from a byte array are used to construct an int.
+    * After the transformation a Little Endian int load is used to directly create the int.
+    * Big Endian has support as well but the bytes in the original array need to be in the opposite order.
+    *
+    * Original trees:
+    * n01n  iadd         <<-- rootNode, combineNode (2)
+    * n02n    iadd       <<-- combineNode (1)
+    * n03n      iadd     <<-- combineNode (0)
+    * n04n        imul                     <<-- processedByteNodes (0)
+    * n05n          bu2i                   <<-- byteConversionNode (0)
+    * n06n            bloadi
+    * n07n              aladd
+    * n08n                ==>aloadi        <<-- aloadNode, loads byte array address, used in all 4 byte loads
+    * n09n                lsub
+    * n10n                  i2l
+    * n11n                    iload        <<-- basePointerNode, used in all 4 byte loads
+    * n12n                  lconst -9      <<-- byteOffsets (0)
+    * n13n          iconst 256             <<-- multValue (0)
+    * n14n        bu2i                   <<-- processedByteNodes (1), byteConversionNode (1)
+    * n15n          bloadi
+    * n16n            aladd
+    * n08n              ==>aloadi
+    * n17n              lsub
+    * n10n                ==>i2l
+    * n18n                lconst -8      <<-- byteOffsets (1)
+    * n19n      imul                  <<-- processedByteNodes (2)
+    * n20n        bu2i                <<-- byteConversionNode (2)
+    * n21n          bloadi
+    * n22n            aladd
+    * n08n              ==>aloadi
+    * n23n              lsub
+    * n10n                ==>i2l
+    * n24n                lconst -10  <<-- byteOffsets (2)
+    * n25n        iconst 0x10000      <<-- multValue (2)
+    * n26n    imul                  <<-- processedByteNodes (3)
+    * n27n      b2i                 <<-- byteConversionNode (3)
+    * n28n        bloadi
+    * n29n          aladd
+    * n08n            ==>aloadi
+    * n30n            lsub
+    * n10n              ==>i2l
+    * n31n              lconst -11  <<-- byteOffsets (3)
+    * n32n      iconst 0x1000000    <<-- multValue (3)
+    *
+    *
+    * After transformation:
+    * n01n  iloadi         <<-- rootNode
+    * n16n    aladd
+    * n08n      ==>aloadi
+    * n17n      lsub
+    * n10n        i2l
+    * n11n          iload
+    * n18n        lconst -8
+    */
 
+
+   /* processedByteNodes are children of a combine node that are not also a combine node. */
+   TR::Node* processedByteNodes[8];
+   /* byteConversionNodes are the conversion node parent for each loaded byte. Sorted such that the least significant byte is in position 0. */
+   TR::Node* byteConversionNodes[8];
+   /* byteOffsets are the constants that act as relative offsets for each loaded byte. Sorted such that the least significant byte is in position 0. */
+   int64_t byteOffsets[8];
+
+   /* byteCount is the number of loaded bytes. */
    int32_t byteCount = 0;
 
+   /* These are used to make sure the same aload/aloadi node and basePointerNode are used for all of the byte loads. */
    TR::Node* aloadNode = NULL;
    TR::Node* basePointerNode = NULL;
 
+   /* Tracks if the final loaded result needs to be sign extended. */
    bool signExtendResult = false;
+   /* Tracks if the loaded byte can be loaded with an Little Endian or Big Endian load. If neither works, the opt bails. */
    bool littleEndianLoad = false;
+   /* Tracks if the final loaded result is an int or a long. */
    bool is64bitResult = rootNode->getDataType().isInt64();
 
+   /* These are used to track nodes while performing the transformation. */
    TR::Node* newLoadChildNode = NULL;
    TR::Node* newConvertChildNode = NULL;
-
    TR::Node* disconnectedNode1 = NULL;
    TR::Node* disconnectedNode2 = NULL;
 
@@ -1958,6 +2230,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       byteConversionNodes[i] = NULL;
       }
 
+   /* Iterate over combineNodeList and populate the processedByteNodes array. */
    for (auto it = combineNodeList->begin(); it != combineNodeList->end(); ++it)
       {
       TR::Node* firstChild = (*it)->getFirstChild();
@@ -1988,6 +2261,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       return currentTreeTop;
       }
 
+   /* This loop performs more checks and collects info on each loaded byte. */
    for (int i = 0; i < byteCount; i++)
       {
       TR::Node* byteConversionNode = NULL;
@@ -2004,6 +2278,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
          }
       else
          {
+         /* aloadNode for all loaded bytes must be the exact same node. */
          if (aloadNode != getALoadReferenceForSeqLoad(processedByteNodes[i]))
             {
             if (trace) traceMsg(comp, "Sequential Load Simplification aload mismatch. rootNode: %p, aloadNode(0): %p, aloadNode(%d): %p\n",
@@ -2011,6 +2286,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
             return currentTreeTop;
             }
 
+         /* basePointerNode for all loaded bytes must be the exact same node (or all NULL). */
          if (basePointerNode != getBasePointerReferenceForSeqLoad(processedByteNodes[i]))
             {
             if (trace) traceMsg(comp, "Sequential Load Simplification basePointerNode mismatch. rootNode: %p, basePointerNode(0): %p, basePointerNode(%d): %p\n",
@@ -2038,7 +2314,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
          }
       else
          {
-         /* Other bytes can not be sign extended */
+         /* Other bytes can not be sign extended. */
          if (checkForSeqLoadSignExtendedByte(processedByteNodes[i]))
             {
             if (trace) traceMsg(comp, "Bytes other than the most significant byte should not be sign extended. rootNode: %p, processedByteNodes[%d]: %p\n", rootNode, i, processedByteNodes[i]);
@@ -2046,6 +2322,12 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
             }
          }
 
+      /*
+       * byteConversionNodes and byteOffsets are sorted such that the least significant byte load is in position 0.
+       * Position 1 has the next most significant load and so on.
+       * multValue is used to determing the significance of the byte load.
+       * If two byte loads have the same multValue, the opt bails out.
+       */
       for (int j = 0; j < byteCount; j++)
          {
          if ((1L << (j * 8)) == multValue)
@@ -2057,12 +2339,16 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
                return currentTreeTop;
                }
             byteConversionNodes[j] = byteConversionNode;
-            byteOffset[j] = getOffsetForSeqLoad(comp, byteConversionNode);
+            byteOffsets[j] = getOffsetForSeqLoad(comp, byteConversionNode);
             break;
             }
          }
       }
 
+   /*
+    * There must be an associated byte load for every position from 0 to (byteCount-1).
+    * If not, the byte loads are not consecutive bytes in the final result.
+    */
    for (int i = 0; i < byteCount; i++)
       {
       if (byteConversionNodes[i] == NULL)
@@ -2074,15 +2360,20 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
 
    if (trace)
       {
-      traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, byteOffset: %ld", rootNode, byteOffset[0]);
+      traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, byteOffsets: %ld", rootNode, byteOffsets[0]);
       for (int i = 1; i < byteCount; i++)
          {
-         traceMsg(comp, ", %ld", byteOffset[i]);
+         traceMsg(comp, ", %ld", byteOffsets[i]);
          }
       traceMsg(comp, "\n");
       }
 
-   if (matchLittleEndianSeqLoadPattern(byteOffset, byteCount))
+   /*
+    * Check if the byte are loaded from consecutive locations in memory.
+    * At this point it is known what the significance of each loaded byte is so check if they can be loaded with an LE or BE load.
+    * If both are incompatible, the opt bails out.
+    */
+   if (matchLittleEndianSeqLoadPattern(byteOffsets, byteCount))
       {
       littleEndianLoad = true;
 
@@ -2097,7 +2388,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
          newLoadChildNode = byteConversionNodes[0]->getFirstChild();
          }
       }
-   else if (matchBigEndianSeqLoadPattern(byteOffset, byteCount))
+   else if (matchBigEndianSeqLoadPattern(byteOffsets, byteCount))
       {
       littleEndianLoad = false;
       newConvertChildNode = byteConversionNodes[byteCount-1];
@@ -2105,21 +2396,21 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       }
    else
       {
-      if (trace) traceMsg(comp, "byteOffset array does not match a big or little endian pattern. rootNode: %p\n", rootNode);
+      if (trace) traceMsg(comp, "byteOffsets array does not match a big or little endian pattern. rootNode: %p\n", rootNode);
       return currentTreeTop;
       }
 
    if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, %s\n", rootNode, littleEndianLoad ? "Little Endian Load" : "Big Endian Load");
    if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, newConvertChildNode: %p, newLoadChildNode: %p\n", rootNode, newConvertChildNode, newLoadChildNode);
 
-   //TODO: add reverse load support
+   //TODO: add byte reverse support
    if (littleEndianLoad && !comp->target().cpu.isLittleEndian())
       {
       if (trace) traceMsg(comp, "Little endian load on big endian target is not supported. rootNode: %p\n", rootNode);
       return currentTreeTop;
       }
 
-   //TODO: add reverse load support
+   //TODO: add byte reverse support
    if (!littleEndianLoad && comp->target().cpu.isLittleEndian())
       {
       if (trace) traceMsg(comp, "Big endian load on little endian target is not supported. rootNode: %p\n", rootNode);
@@ -2131,6 +2422,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       return currentTreeTop;
       }
 
+   /* All checks have passes so perform the transformation. */
    traceMsg(comp, "Sequential Load reduced at rootNode: %p\n", rootNode);
 
    disconnectedNode1 = rootNode->getFirstChild();
@@ -2215,6 +2507,12 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       }
    else if (3 == byteCount)
       {
+      /*
+       * This case performs two loads.
+       * One is a short load that is then shifted to the left by 8 bits.
+       * The second is a byte load.
+       * The two values are combined to get the final 3 byte value.
+       */
       TR::Node * mulNode;
       if (is64bitResult)
          {
@@ -3380,6 +3678,10 @@ int32_t TR_SequentialStoreSimplifier::perform()
 
    vcount_t visitCount1 = comp()->incOrResetVisitCount();
 
+   /*
+    * Combine nodes are the "add" and "or" nodes that construct the longer value out of several loaded bytes.
+    * combineNodeList keeps tracks of the nodes used to construct one particular value. It is populated inside the call to seqLoadSearchAndCombine.
+    */
    NodeForwardList* combineNodeList = new (stackMemoryRegion) NodeForwardList(NodeForwardListAllocator(stackMemoryRegion));
    TR_BitVector* visitedNodes = new (stackMemoryRegion) TR_BitVector(comp()->getNodeCount(), trMemory(), stackAlloc, growable);
 
@@ -3396,9 +3698,14 @@ int32_t TR_SequentialStoreSimplifier::perform()
 
       TR::Node *currentNode = firstNodeInTree;
 
+      /* Set TR_UseOldSeqLoadOpt to use the original version of the opt that combines byte loads into a wider load */
       static bool useOldSeqLoadOpt = (feGetEnv("TR_UseOldSeqLoadOpt") != NULL);
       if (!useOldSeqLoadOpt)
          {
+         /*
+          * seqLoadSearchAndCombine goes through the trees are tries to find a matching pattern for sequential byte loads
+          * that can be replaced by wider loads.
+          */
          currentTree = seqLoadSearchAndCombine(comp(), trace, visitedNodes, currentTree, currentNode, combineNodeList);
          }
       else
