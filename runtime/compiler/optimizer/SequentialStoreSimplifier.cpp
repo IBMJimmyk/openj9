@@ -764,21 +764,6 @@ bool isValidSeqLoadCombine(TR::Compilation* comp, bool trace, TR::Node* combineN
    childrenArray[0] = combineNode->getFirstChild();
    childrenArray[1] = combineNode->getSecondChild();
 
-   //TODO: remove this if not needed anymore
-   /*if (((childrenArray[0]->getOpCodeValue() == TR::iadd) || (childrenArray[0]->getOpCodeValue() == TR::ior)) &&
-       ((childrenArray[1]->getOpCodeValue() == TR::iadd) || (childrenArray[1]->getOpCodeValue() == TR::ior))
-      )
-      {
-      return false;
-      }
-
-   if (((childrenArray[0]->getOpCodeValue() == TR::ladd) || (childrenArray[0]->getOpCodeValue() == TR::lor)) &&
-       ((childrenArray[1]->getOpCodeValue() == TR::ladd) || (childrenArray[1]->getOpCodeValue() == TR::lor))
-      )
-      {
-      return false;
-      }*/
-
    /*
     * Check if the children match the pattern for combining byte loads.
     * There is an optional mul/shl layer.
@@ -2257,9 +2242,15 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
 
    if (trace) traceMsg(comp, "Sequential Load Simplification Candidate - rootNode: %p, byteCount: %d\n", rootNode, byteCount);
 
-   if ((byteCount != 2) && (byteCount != 3) && (byteCount != 4) && (byteCount != 8))
+   if (!is64bitResult && (byteCount > 4))
       {
-      if (trace) traceMsg(comp, "Sequential Load of size other than 2/3/4/8 is not supported. rootNode: %p, byteCount: %d\n", rootNode, byteCount);
+      if (trace) traceMsg(comp, "byteCount is too high for constructing an int value. rootNode: %p, byteCount: %d\n", rootNode, byteCount);
+      return currentTreeTop;
+      }
+
+   if ((byteCount < 2) || (byteCount > 8))
+      {
+      if (trace) traceMsg(comp, "Sequential Load of size other than 2 to 8 is not supported. rootNode: %p, byteCount: %d\n", rootNode, byteCount);
       return currentTreeTop;
       }
 
@@ -2379,10 +2370,20 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
       {
       littleEndianLoad = true;
 
-      if (3 == byteCount)
+      if ((3 == byteCount) || (5 == byteCount))
          {
          newConvertChildNode = byteConversionNodes[1];
          newLoadChildNode = byteConversionNodes[1]->getFirstChild();
+         }
+      else if (6 == byteCount)
+         {
+         newConvertChildNode = byteConversionNodes[2];
+         newLoadChildNode = byteConversionNodes[2]->getFirstChild();
+         }
+      else if (7 == byteCount)
+         {
+         newConvertChildNode = byteConversionNodes[3];
+         newLoadChildNode = byteConversionNodes[3]->getFirstChild();
          }
       else
          {
@@ -2435,6 +2436,7 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
    disconnectedNode1 = rootNode->getFirstChild();
    disconnectedNode2 = rootNode->getSecondChild();
 
+   //TODO: double check refCounts
    if (((4 == byteCount) && !swapBytes && !is64bitResult) ||
        ((8 == byteCount) && !swapBytes)
       )
@@ -2634,6 +2636,178 @@ TR::TreeTop* generateArraycopyFromSequentialLoads(TR::Compilation* comp, bool tr
 
          if (trace) traceMsg(comp, "Setting newConvertChildNode (%p) child to %p.\n", newConvertChildNode, sbyteswapNode);
          newConvertChildNode->setAndIncChild(0, sbyteswapNode);
+         newLoadChildNode->recursivelyDecReferenceCount();
+         }
+      }
+   else if (5 == byteCount)
+      {
+      /*
+       * This case performs two loads.
+       * One is a int load that is then shifted to the left by 1 byte.
+       * The second is a byte load.
+       * The two values are combined to get the final 5 byte value.
+       */
+      TR::Node * mulNode = TR::Node::create(TR::lmul, 2, newConvertChildNode, TR::Node::create(TR::lconst, 0, 256));
+
+      if (trace) traceMsg(comp, "Creating mulNode (%p) with children %p and %p.\n", mulNode, mulNode->getFirstChild(), mulNode->getSecondChild());
+
+      if (trace) traceMsg(comp, "Setting rootNode (%p) children to %p and %p.\n", rootNode, mulNode, byteConversionNodes[0]);
+      rootNode->setAndIncChild(0, mulNode);
+      rootNode->setAndIncChild(1, byteConversionNodes[0]);
+
+      if (trace) traceMsg(comp, "Recreating byteConversionNodes[0] (%p) as bu2l.\n", byteConversionNodes[0]);
+      TR::Node::recreate(byteConversionNodes[0], TR::bu2l);
+
+      if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as iloadi.\n", newLoadChildNode);
+      TR::Node::recreate(newLoadChildNode, TR::iloadi);
+
+      if (signExtendResult)
+         {
+         if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as i2l.\n", newConvertChildNode);
+         TR::Node::recreate(newConvertChildNode, TR::i2l);
+         }
+      else
+         {
+         if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as iu2l.\n", newConvertChildNode);
+         TR::Node::recreate(newConvertChildNode, TR::iu2l);
+         }
+
+      if (swapBytes)
+         {
+         TR::Node * ibyteswapNode = TR::Node::create(TR::ibyteswap, 1, newLoadChildNode);
+         if (trace) traceMsg(comp, "Creating ibyteswapNode (%p) with child %p.\n", ibyteswapNode, ibyteswapNode->getFirstChild());
+
+         if (trace) traceMsg(comp, "Setting newConvertChildNode (%p) child to %p.\n", newConvertChildNode, ibyteswapNode);
+         newConvertChildNode->setAndIncChild(0, ibyteswapNode);
+         newLoadChildNode->recursivelyDecReferenceCount();
+         }
+      }
+   else if (6 == byteCount)
+      {
+      /*
+       * This case performs two loads.
+       * One is a int load that is then shifted to the left by 2 bytes.
+       * The second is a short load.
+       * The two values are combined to get the final 6 byte value.
+       */
+      TR::Node * mulNode = TR::Node::create(TR::lmul, 2, newConvertChildNode, TR::Node::create(TR::lconst, 0, 256*256));
+      if (trace) traceMsg(comp, "Creating mulNode (%p) with children %p and %p.\n", mulNode, mulNode->getFirstChild(), mulNode->getSecondChild());
+
+      TR::Node * shortConversionNode = NULL;
+      if (littleEndianLoad)
+         {
+         shortConversionNode = byteConversionNodes[0];
+         }
+      else
+         {
+         shortConversionNode = byteConversionNodes[1];
+         }
+      TR::Node * shortLoadNode = shortConversionNode->getFirstChild();
+
+      if (trace) traceMsg(comp, "Setting rootNode (%p) children to %p and %p.\n", rootNode, mulNode, shortConversionNode);
+      rootNode->setAndIncChild(0, mulNode);
+      rootNode->setAndIncChild(1, shortConversionNode);
+
+      if (trace) traceMsg(comp, "Recreating shortLoadNode (%p) as sloadi.\n", shortLoadNode);
+      TR::Node::recreate(shortLoadNode, TR::sloadi);
+
+      if (trace) traceMsg(comp, "Recreating shortConversionNode (%p) as su2l.\n", shortConversionNode);
+      TR::Node::recreate(shortConversionNode, TR::su2l);
+
+      if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as iloadi.\n", newLoadChildNode);
+      TR::Node::recreate(newLoadChildNode, TR::iloadi);
+
+      if (signExtendResult)
+         {
+         if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as i2l.\n", newConvertChildNode);
+         TR::Node::recreate(newConvertChildNode, TR::i2l);
+         }
+      else
+         {
+         if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as iu2l.\n", newConvertChildNode);
+         TR::Node::recreate(newConvertChildNode, TR::iu2l);
+         }
+
+      if (swapBytes)
+         {
+         TR::Node * sbyteswapNode = TR::Node::create(TR::sbyteswap, 1, shortLoadNode);
+         if (trace) traceMsg(comp, "Creating sbyteswapNode (%p) with child %p.\n", sbyteswapNode, sbyteswapNode->getFirstChild());
+
+         if (trace) traceMsg(comp, "Setting shortConversionNode (%p) child to %p.\n", shortConversionNode, sbyteswapNode);
+         shortConversionNode->setAndIncChild(0, sbyteswapNode);
+         shortLoadNode->recursivelyDecReferenceCount();
+
+         TR::Node * ibyteswapNode = TR::Node::create(TR::ibyteswap, 1, newLoadChildNode);
+         if (trace) traceMsg(comp, "Creating ibyteswapNode (%p) with child %p.\n", ibyteswapNode, ibyteswapNode->getFirstChild());
+
+         if (trace) traceMsg(comp, "Setting newConvertChildNode (%p) child to %p.\n", newConvertChildNode, ibyteswapNode);
+         newConvertChildNode->setAndIncChild(0, ibyteswapNode);
+         newLoadChildNode->recursivelyDecReferenceCount();
+         }
+      }
+   else if (7 == byteCount)
+      {
+      /*
+       * This case performs two loads.
+       * One is a int load that is then shifted to the left by 3 bytes.
+       * The second is also an int load that overlaps the first load by 1 byte but the highest byte is masked out.
+       * The two values are combined to get the final 7 byte value.
+       */
+      TR::Node * mulNode = TR::Node::create(TR::lmul, 2, newConvertChildNode, TR::Node::create(TR::lconst, 0, 256*256*256));
+      if (trace) traceMsg(comp, "Creating mulNode (%p) with children %p and %p.\n", mulNode, mulNode->getFirstChild(), mulNode->getSecondChild());
+
+      TR::Node * lowerIntConversionNode = NULL;
+      if (littleEndianLoad)
+         {
+         lowerIntConversionNode = byteConversionNodes[0];
+         }
+      else
+         {
+         lowerIntConversionNode = byteConversionNodes[3];
+         }
+      TR::Node * lowerIntLoadNode = lowerIntConversionNode->getFirstChild();
+
+      TR::Node * andNode = TR::Node::create(TR::land, 2, lowerIntConversionNode, TR::Node::create(TR::lconst, 0, 0xFFFFFF));
+      if (trace) traceMsg(comp, "Creating andNode (%p) with children %p and %p.\n", andNode, andNode->getFirstChild(), andNode->getSecondChild());
+
+      if (trace) traceMsg(comp, "Setting rootNode (%p) children to %p and %p.\n", rootNode, mulNode, lowerIntConversionNode);
+      rootNode->setAndIncChild(0, mulNode);
+      rootNode->setAndIncChild(1, andNode);
+
+      if (trace) traceMsg(comp, "Recreating lowerIntLoadNode (%p) as iloadi.\n", lowerIntLoadNode);
+      TR::Node::recreate(lowerIntLoadNode, TR::iloadi);
+
+      if (trace) traceMsg(comp, "Recreating lowerIntConversionNode (%p) as i2l.\n", lowerIntConversionNode);
+      TR::Node::recreate(lowerIntConversionNode, TR::i2l);
+
+      if (trace) traceMsg(comp, "Recreating newLoadChildNode (%p) as iloadi.\n", newLoadChildNode);
+      TR::Node::recreate(newLoadChildNode, TR::iloadi);
+
+      if (signExtendResult)
+         {
+         if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as i2l.\n", newConvertChildNode);
+         TR::Node::recreate(newConvertChildNode, TR::i2l);
+         }
+      else
+         {
+         if (trace) traceMsg(comp, "Recreating newConvertChildNode (%p) as iu2l.\n", newConvertChildNode);
+         TR::Node::recreate(newConvertChildNode, TR::iu2l);
+         }
+
+      if (swapBytes)
+         {
+         TR::Node * ibyteswapNode1 = TR::Node::create(TR::ibyteswap, 1, lowerIntLoadNode);
+         if (trace) traceMsg(comp, "Creating ibyteswapNode (%p) with child %p.\n", ibyteswapNode1, ibyteswapNode1->getFirstChild());
+
+         if (trace) traceMsg(comp, "Setting lowerIntConversionNode (%p) child to %p.\n", lowerIntConversionNode, ibyteswapNode1);
+         lowerIntConversionNode->setAndIncChild(0, ibyteswapNode1);
+         lowerIntLoadNode->recursivelyDecReferenceCount();
+
+         TR::Node * ibyteswapNode2 = TR::Node::create(TR::ibyteswap, 1, newLoadChildNode);
+         if (trace) traceMsg(comp, "Creating ibyteswapNode (%p) with child %p.\n", ibyteswapNode2, ibyteswapNode2->getFirstChild());
+
+         if (trace) traceMsg(comp, "Setting newConvertChildNode (%p) child to %p.\n", newConvertChildNode, ibyteswapNode2);
+         newConvertChildNode->setAndIncChild(0, ibyteswapNode2);
          newLoadChildNode->recursivelyDecReferenceCount();
          }
       }
