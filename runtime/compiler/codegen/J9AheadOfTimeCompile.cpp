@@ -315,7 +315,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
             {
             TR_OpaqueClassBlock *classOfMethod = reinterpret_cast<TR_OpaqueClassBlock *>(recordInfo->data5);
             uint16_t classID = symValManager->getIDFromSymbol(static_cast<void *>(classOfMethod));
-            allocRecord->setCpIndex(reloTarget, static_cast<uintptr_t>(classID));
+            allocRecord->setData(reloTarget, static_cast<uintptr_t>(classID));  //TODO: change to setData
             }
          else
             {
@@ -344,7 +344,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
             {
             TR_OpaqueClassBlock *classOfMethod = reinterpret_cast<TR_OpaqueClassBlock *>(recordInfo->data5);
             uint16_t classID = symValManager->getIDFromSymbol(static_cast<void *>(classOfMethod));
-            allocRecord->setCpIndex(reloTarget, static_cast<uintptr_t>(classID));
+            allocRecord->setData(reloTarget, static_cast<uintptr_t>(classID));  //TODO: change to setData
             }
          else
             {
@@ -422,7 +422,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
             }
          else
             {
-            cpIndexOrData = static_cast<uintptr_t>(callSymRef->getCPIndex());
+            cpIndexOrData = static_cast<uintptr_t>(callSymRef->getCPIndex() & 0x3FFFF);
             }
 
          TR_OpaqueClassBlock *inlinedMethodClass = resolvedMethod->containingClass();
@@ -432,7 +432,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
          imRecord->setReloFlags(reloTarget, flags);
          imRecord->setInlinedSiteIndex(reloTarget, inlinedSiteIndex);
          imRecord->setConstantPool(reloTarget, reinterpret_cast<uintptr_t>(callSymRef->getOwningMethod(comp)->constantPool()));
-         imRecord->setCpIndex(reloTarget, cpIndexOrData);
+         imRecord->setData(reloTarget, cpIndexOrData);   //TODO: change to setData
          imRecord->setRomClassOffsetInSharedCache(reloTarget, romClassOffsetInSharedCache);
 
          if (kind != TR_InlinedInterfaceMethod
@@ -514,12 +514,12 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
             }
          else
             {
-            cpIndexOrData = static_cast<uintptr_t>(callSymRef->getCPIndex());
+            cpIndexOrData = static_cast<uintptr_t>(callSymRef->getCPIndex() & 0x3FFFF);
             }
 
          pRecord->setInlinedSiteIndex(reloTarget, inlinedSiteIndex);
          pRecord->setConstantPool(reloTarget, reinterpret_cast<uintptr_t>(owningMethod->constantPool()));
-         pRecord->setCpIndex(reloTarget, cpIndexOrData);
+         pRecord->setData(reloTarget, cpIndexOrData);   //TODO: change to setData
          pRecord->setRomClassOffsetInSharedCache(reloTarget, romClassOffsetInSharedCache);
          pRecord->setClassChainIdentifyingLoaderOffsetInSharedCache(reloTarget, classChainIdentifyingLoaderOffsetInSharedCache);
          pRecord->setClassChainForInlinedMethod(reloTarget, classChainOffsetInSharedCache);

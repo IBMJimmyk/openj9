@@ -158,7 +158,11 @@ struct TR_RelocationRecordConstantPoolBinaryTemplate : public TR_RelocationRecor
 
 struct TR_RelocationRecordConstantPoolWithIndexBinaryTemplate : public TR_RelocationRecordConstantPoolBinaryTemplate
    {
-   UDATA _index;
+   union
+      {
+      UDATA _index;
+      UDATA _data;
+      } _cpIndexOrData;
    };
 
 struct TR_RelocationRecordJ2IVirtualThunkPointerBinaryTemplate : public TR_RelocationRecordConstantPoolBinaryTemplate
@@ -1570,19 +1574,32 @@ TR_RelocationRecordConstantPoolWithIndex::print(TR_RelocationRuntime *reloRuntim
    TR_RelocationTarget *reloTarget = reloRuntime->reloTarget();
    TR_RelocationRuntimeLogger *reloLogger = reloRuntime->reloLogger();
    TR_RelocationRecordConstantPool::print(reloRuntime);
-   reloLogger->printf("\tcpIndex %p\n", cpIndex(reloTarget));
+   reloLogger->printf("\tcpIndex/data %p\n", data(reloTarget));
    }
 
 void
 TR_RelocationRecordConstantPoolWithIndex::setCpIndex(TR_RelocationTarget *reloTarget, uintptr_t cpIndex)
    {
-   reloTarget->storeRelocationRecordValue(cpIndex, (uintptr_t *) &((TR_RelocationRecordConstantPoolWithIndexBinaryTemplate *)_record)->_index);
+   TR_ASSERT_FATAL(cpIndex != (uintptr_t)-1, "Unexpected cpIndex of -1\n");  //TODO: fix the casting
+   reloTarget->storeRelocationRecordValue(cpIndex & 0x3FFFF, (uintptr_t *) &((TR_RelocationRecordConstantPoolWithIndexBinaryTemplate *)_record)->_cpIndexOrData._index);
    }
 
 uintptr_t
 TR_RelocationRecordConstantPoolWithIndex::cpIndex(TR_RelocationTarget *reloTarget)
    {
-   return reloTarget->loadRelocationRecordValue((uintptr_t *) &((TR_RelocationRecordConstantPoolWithIndexBinaryTemplate *)_record)->_index);
+   return reloTarget->loadRelocationRecordValue((uintptr_t *) &((TR_RelocationRecordConstantPoolWithIndexBinaryTemplate *)_record)->_cpIndexOrData._index) & 0x3FFFF;
+   }
+
+void
+TR_RelocationRecordConstantPoolWithIndex::setData(TR_RelocationTarget *reloTarget, uintptr_t data)
+   {
+   reloTarget->storeRelocationRecordValue(data, (uintptr_t *) &((TR_RelocationRecordConstantPoolWithIndexBinaryTemplate *)_record)->_cpIndexOrData._data);
+   }
+
+uintptr_t
+TR_RelocationRecordConstantPoolWithIndex::data(TR_RelocationTarget *reloTarget)
+   {
+   return reloTarget->loadRelocationRecordValue((uintptr_t *) &((TR_RelocationRecordConstantPoolWithIndexBinaryTemplate *)_record)->_cpIndexOrData._data);
    }
 
 TR_OpaqueMethodBlock *
@@ -2488,7 +2505,7 @@ TR_RelocationRecordInlinedAllocation::preparePrivateData(TR_RelocationRuntime *r
 
    if (reloRuntime->comp()->getOption(TR_UseSymbolValidationManager))
       {
-      uint16_t classID = (uint16_t)cpIndex(reloTarget);
+      uint16_t classID = (uint16_t)data(reloTarget);
       clazz = reloRuntime->comp()->getSymbolValidationManager()->getJ9ClassFromID(classID);
       }
    else
@@ -2739,9 +2756,9 @@ TR_RelocationRecordInlinedMethod::inlinedSiteValid(TR_RelocationRuntime *reloRun
          {
          TR_RelocationRecordInlinedMethodPrivateData *reloPrivateData = &(privateData()->inlinedMethod);
 
-         uintptr_t data = (uintptr_t)cpIndex(reloTarget);
-         uint16_t methodID = (uint16_t)(data & 0xFFFF);
-         uint16_t receiverClassID = (uint16_t)((data >> 16) & 0xFFFF);
+         uintptr_t reloData = (uintptr_t)data(reloTarget);
+         uint16_t methodID = (uint16_t)(reloData & 0xFFFF);
+         uint16_t receiverClassID = (uint16_t)((reloData >> 16) & 0xFFFF);
 
          // currentMethod is guaranteed to not be NULL because of the SVM
          currentMethod = reloRuntime->comp()->getSymbolValidationManager()->getJ9MethodFromID(methodID);
@@ -3230,7 +3247,7 @@ TR_RelocationRecordProfiledInlinedMethod::preparePrivateData(TR_RelocationRuntim
 
    if (reloRuntime->comp()->getOption(TR_UseSymbolValidationManager))
       {
-      uint16_t inlinedCodeClassID = (uint16_t)cpIndex(reloTarget);
+      uint16_t inlinedCodeClassID = (uint16_t)data(reloTarget);
       inlinedCodeClass = (TR_OpaqueClassBlock *)reloRuntime->comp()->getSymbolValidationManager()->getJ9ClassFromID(inlinedCodeClassID);
       }
    else

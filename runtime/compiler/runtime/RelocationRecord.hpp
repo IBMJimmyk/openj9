@@ -458,6 +458,8 @@ class TR_RelocationRecordConstantPoolWithIndex : public TR_RelocationRecordConst
 
       void setCpIndex(TR_RelocationTarget *reloTarget, uintptr_t cpIndex);
       uintptr_t cpIndex(TR_RelocationTarget *reloTarget);
+      void setData(TR_RelocationTarget *reloTarget, uintptr_t data);
+      uintptr_t data(TR_RelocationTarget *reloTarget);
 
       TR_OpaqueMethodBlock *getVirtualMethodFromCP(TR_RelocationRuntime *reloRuntime, void *void_cp, int32_t cpIndex);
       TR_OpaqueMethodBlock *getStaticMethodFromCP(TR_RelocationRuntime *reloRuntime, void *void_cp, int32_t cpIndex);
