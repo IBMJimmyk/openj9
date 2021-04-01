@@ -281,6 +281,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
 
          cpiRecord->setInlinedSiteIndex(reloTarget, inlinedSiteIndex);
          cpiRecord->setConstantPool(reloTarget, reinterpret_cast<uintptr_t>(constantPool));
+         TR_ASSERT_FATAL((uintptr_t)symRef->getCPIndex() != (uintptr_t)-1, "1 - Unexpected cpIndex of -1\n");
          cpiRecord->setCpIndex(reloTarget, symRef->getCPIndex());
          }
          break;
@@ -319,6 +320,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
             }
          else
             {
+            TR_ASSERT_FATAL(static_cast<uintptr_t>(classSymRef->getCPIndex()) != (uintptr_t)-1, "2 - Unexpected cpIndex of -1\n");
             allocRecord->setCpIndex(reloTarget, static_cast<uintptr_t>(classSymRef->getCPIndex()));
             }
          }
@@ -348,6 +350,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
             }
          else
             {
+            TR_ASSERT_FATAL(static_cast<uintptr_t>(classSymRef->getCPIndex()) != (uintptr_t)-1, "3 - Unexpected cpIndex of -1\n");
             allocRecord->setCpIndex(reloTarget, static_cast<uintptr_t>(classSymRef->getCPIndex()));
             }
          }
@@ -362,6 +365,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
 
          fieldRecord->setInlinedSiteIndex(reloTarget, inlinedSiteIndex);
          fieldRecord->setConstantPool(reloTarget, reinterpret_cast<uintptr_t>(aotCI->_constantPool));
+         TR_ASSERT_FATAL(static_cast<uintptr_t>(aotCI->_cpIndex) != (uintptr_t)-1, "4 - Unexpected cpIndex of -1\n");
          fieldRecord->setCpIndex(reloTarget, static_cast<uintptr_t>(aotCI->_cpIndex));
          fieldRecord->setClassChainOffsetInSharedCache(reloTarget, classChainOffsetInSharedCache);
          }
@@ -458,6 +462,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
 
          vsfRecord->setInlinedSiteIndex(reloTarget, inlinedSiteIndex);
          vsfRecord->setConstantPool(reloTarget, reinterpret_cast<uintptr_t>(aotCI->_constantPool));
+         TR_ASSERT_FATAL(static_cast<uintptr_t>(aotCI->_cpIndex) != (uintptr_t)-1, "5 - Unexpected cpIndex of -1\n");
          vsfRecord->setCpIndex(reloTarget, aotCI->_cpIndex);
          vsfRecord->setRomClassOffsetInSharedCache(reloTarget, romClassOffsetInSharedCache);
          }
@@ -474,6 +479,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
 
          vcRecord->setInlinedSiteIndex(reloTarget, inlinedSiteIndex);
          vcRecord->setConstantPool(reloTarget, reinterpret_cast<uintptr_t>(aotCI->_constantPool));
+         TR_ASSERT_FATAL(static_cast<uintptr_t>(aotCI->_cpIndex) != (uintptr_t)-1, "6 - Unexpected cpIndex of -1\n");
          vcRecord->setCpIndex(reloTarget, aotCI->_cpIndex);
          vcRecord->setClassChainOffsetInSharedCache(reloTarget, classChainOffsetInSharedCache);
          }
@@ -661,6 +667,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
 
          cpRecord->setClassID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_class));
          cpRecord->setBeholderID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_beholder));
+         TR_ASSERT_FATAL((uintptr_t)svmRecord->_cpIndex != (uintptr_t)-1, "7 - Unexpected cpIndex of -1\n");
          cpRecord->setCpIndex(reloTarget, svmRecord->_cpIndex);
          }
          break;
@@ -674,6 +681,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
          dcpRecord->setIsStatic(reloTarget, svmRecord->_isStatic);
          dcpRecord->setClassID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_class));
          dcpRecord->setBeholderID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_beholder));
+         TR_ASSERT_FATAL((uintptr_t)svmRecord->_cpIndex != (uintptr_t)-1, "8 - Unexpected cpIndex of -1\n");
          dcpRecord->setCpIndex(reloTarget, svmRecord->_cpIndex);
          }
          break;
@@ -686,6 +694,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
 
          scpRecord->setClassID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_class));
          scpRecord->setBeholderID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_beholder));
+         TR_ASSERT_FATAL((uintptr_t)svmRecord->_cpIndex != (uintptr_t)-1, "9 - Unexpected cpIndex of -1\n");
          scpRecord->setCpIndex(reloTarget, svmRecord->_cpIndex);
          }
          break;
@@ -752,6 +761,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
 
          cfitRecord->setClassID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_class));
          cfitRecord->setBeholderID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_beholder));
+         TR_ASSERT_FATAL((uintptr_t)svmRecord->_cpIndex != (uintptr_t)-1, "10 - Unexpected cpIndex of -1\n");
          cfitRecord->setCpIndex(reloTarget, svmRecord->_cpIndex);
          }
          break;
@@ -764,6 +774,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
 
          dcfsRecord->setClassID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_class));
          dcfsRecord->setBeholderID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_beholder));
+         TR_ASSERT_FATAL((uintptr_t)svmRecord->_cpIndex != (uintptr_t)-1, "11 - Unexpected cpIndex of -1\n");
          dcfsRecord->setCpIndex(reloTarget, svmRecord->_cpIndex);
          }
          break;
@@ -858,6 +869,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
          vmfcpRecord->setMethodID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_method));
          vmfcpRecord->setDefiningClassID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_definingClass));
          vmfcpRecord->setBeholderID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_beholder));
+         TR_ASSERT_FATAL((uintptr_t)svmRecord->_cpIndex != (uintptr_t)-1, "12 - Unexpected cpIndex of -1\n");
          vmfcpRecord->setCpIndex(reloTarget, static_cast<uint16_t>(svmRecord->_cpIndex));
          }
          break;
@@ -893,6 +905,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
          imfcpRecord->setDefiningClassID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_definingClass));
          imfcpRecord->setBeholderID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_beholder));
          imfcpRecord->setLookupID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_lookup));
+         TR_ASSERT_FATAL((uintptr_t)svmRecord->_cpIndex != (uintptr_t)-1, "13 - Unexpected cpIndex of -1\n");
          imfcpRecord->setCpIndex(reloTarget, static_cast<uint16_t>(svmRecord->_cpIndex));
          }
          break;
@@ -906,6 +919,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
          iimfcpRecord->setMethodID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_method));
          iimfcpRecord->setDefiningClassID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_definingClass));
          iimfcpRecord->setBeholderID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_beholder));
+         TR_ASSERT_FATAL((uintptr_t)svmRecord->_cpIndex != (uintptr_t)-1, "14 - Unexpected cpIndex of -1\n");
          iimfcpRecord->setCpIndex(reloTarget, static_cast<uint16_t>(svmRecord->_cpIndex));
          }
          break;
@@ -977,6 +991,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
          mfsiiRecord->setDefiningClassID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_definingClass));
          mfsiiRecord->setThisClassID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_thisClass));
          mfsiiRecord->setCallerMethodID(reloTarget, symValManager->getIDFromSymbol(svmRecord->_callerMethod));
+         TR_ASSERT_FATAL((uintptr_t)svmRecord->_cpIndex != (uintptr_t)-1, "15 - Unexpected cpIndex of -1\n");
          mfsiiRecord->setCpIndex(reloTarget, static_cast<uint16_t>(svmRecord->_cpIndex));
          }
          break;
@@ -1043,6 +1058,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
 
          daRecord->setInlinedSiteIndex(reloTarget, inlinedSiteIndex);
          daRecord->setConstantPool(reloTarget, reinterpret_cast<uintptr_t>(constantPool));
+         TR_ASSERT_FATAL((uintptr_t)symRef->getCPIndex() != (uintptr_t)-1, "16 - Unexpected cpIndex of -1\n");
          daRecord->setCpIndex(reloTarget, symRef->getCPIndex());
          daRecord->setOffset(reloTarget, symRef->getOffset());
          }
