@@ -128,6 +128,7 @@ void TR::S390EncodingRelocation::addRelocation(TR::CodeGenerator *cg, uint8_t *c
       {
       if (cg->needRelocationsForStatics())
          {
+         TR_ASSERT_FATAL((uintptr_t)_symbolReference->getCPIndex() != (uintptr_t)-1, "Unexpected cpIndex of -1 - addRelocation");
          AOTcgDiag1(  comp, "TR_DataAddress cursor=%x\n", cursor);
          cg->addExternalRelocation(new (cg->trHeapMemory()) TR::ExternalRelocation(cursor, (uint8_t *) _symbolReference, (uint8_t *)_inlinedSiteIndex, TR_DataAddress, cg),
                               file, line, node);

@@ -76,6 +76,7 @@ uint8_t *TR::J9WatchedStaticFieldSnippet::emitSnippetBody()
       {
       if (cg()->needRelocationsForStatics())
          {
+         TR_ASSERT_FATAL((uintptr_t)node->getSymbolReference()->getCPIndex() != (uintptr_t)-1, "Unexpected cpIndex of -1 - J9WatchedStaticFieldSnippet");
          cg()->addExternalRelocation(
             new (cg()->trHeapMemory()) TR::ExternalRelocation(cursor + offsetof(J9JITWatchedStaticFieldData, fieldAddress), reinterpret_cast<uint8_t *>(node->getSymbolReference()), reinterpret_cast<uint8_t *>(node->getInlinedSiteIndex()), TR_DataAddress, cg()),
             __FILE__,
