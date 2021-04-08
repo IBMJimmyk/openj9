@@ -8243,7 +8243,7 @@ TR::CompilationInfoPerThreadBase::wrappedCompile(J9PortLibrary *portLib, void * 
                // This option is used to generate SIMD instructions on Z. Currently the infrastructure
                // to support the relocation of some of those instructions is not available. Thus we disable
                // this option for remote compilations.
-               options->setOption(TR_DisableSIMDArrayTranslate);
+               options->setOption(TR_DisableSIMDArrayTranslate);  //TODO: might need the same for AOT?
 
                // Infrastructure to support the TOC is currently not available for Remote Compilations. We disable the feature
                // here so that the codegen doesn't generate TOC enabled code as it won't be valid on the client JVM.
