@@ -138,6 +138,11 @@ J9::Z::CodeGenerator::initialize()
       cg->setSupportsArrayTranslateAndTest();
       }
 
+   if (comp->compileRelocatableCode())
+      {
+      comp->setOption(TR_DisableSIMDArrayTranslate);
+      }
+
    // Enable compaction of local stack slots.  i.e. variables with non-overlapping live ranges
    // can share the same slot.
    cg->setSupportsCompactedLocals();
