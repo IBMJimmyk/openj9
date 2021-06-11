@@ -32,7 +32,6 @@ ifeq (aix_ppc-64_cmprssptrs, $(SPEC))
 		--enable-OMRTHREAD_LIB_AIX \
 		--enable-OMR_ARCH_POWER \
 		--enable-OMR_ENV_DATA64 \
-		--enable-OMR_GC_CONCURRENT_SCAVENGER \
 		--enable-OMR_PORT_CAN_RESERVE_SPECIFIC_ADDRESS \
 		OMR_GC_POINTER_MODE=compressed
 endif
@@ -42,7 +41,6 @@ ifeq (aix_ppc-64, $(SPEC))
 		--enable-OMRTHREAD_LIB_AIX \
 		--enable-OMR_ARCH_POWER \
 		--enable-OMR_ENV_DATA64 \
-		--enable-OMR_GC_CONCURRENT_SCAVENGER \
 		--enable-OMR_PORT_CAN_RESERVE_SPECIFIC_ADDRESS \
 		OMR_GC_POINTER_MODE=full
 endif
