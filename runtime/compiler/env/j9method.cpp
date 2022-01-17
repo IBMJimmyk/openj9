@@ -5972,6 +5972,7 @@ TR_ResolvedJ9Method::methodTypeTableEntryAddress(int32_t cpIndex)
    {
    J9Class *ramClass = constantPoolHdr();
    UDATA index = (((J9RAMMethodRef*) literals())[cpIndex]).methodIndexAndArgCount >> 8;
+   TR_ASSERT_FATAL(index & 0x3 == 0, "methodTypeTableEntryAddress - Bad methodIndexAndArgCount: %" PRIxPTR, index);
 #if defined(J9VM_OPT_OPENJDK_METHODHANDLE)
    return ramClass->invokeCache + index;
 #else
@@ -6104,6 +6105,7 @@ TR_ResolvedJ9Method::vTableSlot(U_32 cpIndex)
    TR_ASSERT(cpIndex != -1, "cpIndex shouldn't be -1");
    //UDATA vTableSlot = ((J9RAMVirtualMethodRef *)literals())[cpIndex].methodIndexAndArgCount >> 8;
    TR_ASSERT(_vTableSlot, "vTableSlot called for unresolved method");
+   TR_ASSERT_FATAL(_vTableSlot & 0x3 == 0, "vTableSlot - Bad methodIndexAndArgCount: %" PRIxPTR, _vTableSlot);
    return _vTableSlot;
    }
 
@@ -6161,6 +6163,7 @@ TR_ResolvedJ9Method::getVirtualMethod(TR_J9VMBase *fej9, J9ConstantPool *cp, I_3
 
    *vTableOffset = (((J9RAMVirtualMethodRef*) literals)[cpIndex]).methodIndexAndArgCount;
    *vTableOffset >>= 8;
+   TR_ASSERT_FATAL(*vTableOffset & 0x3 == 0, "getVirtualMethod - Bad methodIndexAndArgCount: %" PRIxPTR, *vTableOffset);
    if (J9VTABLE_INITIAL_VIRTUAL_OFFSET == *vTableOffset)
       {
       if (unresolvedInCP)

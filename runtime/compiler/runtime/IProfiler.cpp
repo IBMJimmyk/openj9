@@ -629,6 +629,7 @@ static U_32 vftOffsetFromPC (J9Method *method, uintptr_t pc)
    J9RAMConstantPoolItem *literals = (J9RAMConstantPoolItem *) J9_CP_FROM_METHOD(method);
    UDATA vTableSlot = ((J9RAMVirtualMethodRef *)literals)[cpIndex].methodIndexAndArgCount >> 8;
    TR_ASSERT(vTableSlot, "vTableSlot called for unresolved method");
+   TR_ASSERT_FATAL(vTableSlot & 0x3 == 0, "vftOffsetFromPC - Bad methodIndexAndArgCount: %" PRIxPTR, vTableSlot);
 
    return (U_32) (TR::Compiler->vm.getInterpreterVTableOffset() - vTableSlot);
    }
