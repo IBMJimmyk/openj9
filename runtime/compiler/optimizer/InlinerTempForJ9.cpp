@@ -5002,7 +5002,7 @@ TR_InlinerFailureReason
       case TR::com_ibm_jit_JITHelpers_getJ9ClassFromObject64:
       case TR::com_ibm_jit_JITHelpers_getClassInitializeStatus:
       case TR::java_lang_StringUTF16_getChar:
-      case TR::java_lang_StringUTF16_putChar:
+      //case TR::java_lang_StringUTF16_putChar:
       case TR::java_lang_StringUTF16_toBytes:
       case TR::java_lang_invoke_MethodHandle_asType:
             return DontInline_Callee;
