@@ -132,7 +132,7 @@ __arrayTranslateTRTO:
         andi.           r6, r3, 0xf
         beq             cr0, .L.__main_TRTO            ! if clear, we are aligned
         lhz             r6, 0(r3)
-        andi.           r7, r6, 0xff00
+        and.                   r7, r6, r8
         bne-            cr0, .L.__done_TRTO            ! element has bits in 0xff00, we are done
         stb             r6, 0(r4)
         addi            r3, r3, 2
