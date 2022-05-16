@@ -6049,7 +6049,7 @@ makeMemCpyGraph(TR::Compilation *c, int32_t ctrl)
    tgt->setAspects(isub|mul | sameTypeLoadStore, existAccess, existAccess);
    tgt->setNoAspects(call|bndchk|bitop1, 0, 0);
    tgt->setMinCounts(1, 1, 1);  // minimum ifCount, indirectLoadCount, indirectStoreCount
-   tgt->setHotness(warm, true);
+   tgt->setHotness(warm, false);
    tgt->setInhibitBeforeVersioning();
    return tgt;
    }
