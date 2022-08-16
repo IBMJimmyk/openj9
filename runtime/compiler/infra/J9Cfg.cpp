@@ -104,7 +104,8 @@ static bool hasJProfilingInfo(TR::Compilation *comp, TR::CFG *cfg)
       TR_ByteCodeInfo toCheck;
       toCheck.setByteCodeIndex(0);
       toCheck.setCallerIndex(comp->getCurrentInlinedSiteIndex());
-      int32_t entryFrequency = profileInfo->getBlockFrequencyInfo()->getFrequencyInfo(toCheck, comp, false, false);
+      int32_t entryFrequency = profileInfo->getBlockFrequencyInfo()->getFrequencyInfo(toCheck, comp, false, true);
+      traceMsg(comp,"RAHIL: hasJProfilingInfo [%d,%d] frequency = %d\n", toCheck.getCallerIndex(), toCheck.getByteCodeIndex(), entryFrequency);
       if (entryFrequency > -1)
          {
          return true;
@@ -127,6 +128,7 @@ J9::CFG::setFrequencies()
    // Do not use JIT profiler info for estimate code size.
    bool externFreq = ! comp()->getOption(TR_EnableScorchInterpBlockFrequencyProfiling);
    bool hasJPI = hasJProfilingInfo(comp(), self());
+   if (comp()->trace(OMR::inlining)) { traceMsg( comp(), "ZZZZZ : J9 setFrequencies: externFreq=%d, hasJPI=%d\n",externFreq, hasJPI); }
    if (externFreq
        && comp()->hasBlockFrequencyInfo()
        && (
@@ -137,6 +139,7 @@ J9::CFG::setFrequencies()
       {
       if (!self()->consumePseudoRandomFrequencies())
          {
+         if (comp()->trace(OMR::inlining)) { traceMsg( comp(), "ZZZZZ : J9 setFrequencies: doing it\n"); }
          _externalProfiler = comp()->fej9()->hasIProfilerBlockFrequencyInfo(*comp());
          TR_BitVector *nodesToBeNormalized = self()->setBlockAndEdgeFrequenciesBasedOnJITProfiler();
          self()->normalizeFrequencies(nodesToBeNormalized);
@@ -221,6 +224,7 @@ J9::CFG::setBlockAndEdgeFrequenciesBasedOnJITProfiler()
 
    if (!profileInfo)
       return NULL;
+   if (comp()->trace(OMR::inlining)) { traceMsg( comp(), "ZZZZZ : setBlockAndEdgeFrequenciesBasedOnJITProfiler\n"); }
 
    TR_BlockFrequencyInfo *blockFrequencyInfo = profileInfo->getBlockFrequencyInfo();
 
@@ -228,6 +232,8 @@ J9::CFG::setBlockAndEdgeFrequenciesBasedOnJITProfiler()
 
    TR_BitVector *nodesToBeNormalized = NULL;
    TR::CFGNode *node;
+
+   if (comp()->trace(OMR::inlining)) { traceMsg( comp(), "ZZZZZ : _maxFrequency=%d\n", _maxFrequency); }
 
    int32_t *nodeFrequencies = NULL;
    if (_maxFrequency < 0)
@@ -261,11 +267,21 @@ J9::CFG::setBlockAndEdgeFrequenciesBasedOnJITProfiler()
 
    for (int32_t traversalIndex = 0; traversalIndex < getForwardTraversalLength(); traversalIndex++)
      {
-     node = getForwardTraversalElement(traversalIndex);
-     int32_t frequency = node->getFrequency();
-     if (frequency < 0)
+      node = getForwardTraversalElement(traversalIndex);
+      int32_t frequency = node->getFrequency();
+      if (comp()->getOption(TR_TraceBFGeneration)) { traceMsg(comp(), "ZZZZZ : QQ node %p freq=%d\n", node, frequency); }
+      if (frequency < 0)
         {
-        frequency = nodeFrequencies ? nodeFrequencies[toBlock(node)->getNumber()] : blockFrequencyInfo->getFrequencyInfo(toBlock(node), comp());
+         if (nodeFrequencies)
+            {
+            frequency = nodeFrequencies[toBlock(node)->getNumber()];
+            if (comp()->getOption(TR_TraceBFGeneration)) { traceMsg(comp(), "ZZZZZ : QQ has nodeFrequencies : freq=%d\n", frequency); }
+            } 
+         else 
+            {
+            frequency = blockFrequencyInfo->getFrequencyInfo(toBlock(node), comp());
+            if (comp()->getOption(TR_TraceBFGeneration)) { traceMsg(comp(), "ZZZZZ : QQ getFrequencyInfo: freq=%d\n", frequency); }
+            }
         //frequency = nodeFrequencies[toBlock(node)->getNumber()];
 
         bool isGuardedBlock = false;

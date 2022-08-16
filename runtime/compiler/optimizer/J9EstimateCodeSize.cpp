@@ -1249,7 +1249,7 @@ TR_J9EstimateCodeSize::realEstimateCodeSize(TR_CallTarget *calltarget, TR_CallSt
       {
       cfg._calledFrequency = 10000;
       }
-
+   if (comp()->trace(OMR::inlining)) { traceMsg( comp(), "ZZZZZ : about to propagateColdInfo: callGraphEnabled=%d\n", callGraphEnabled); }
    cfg.propagateColdInfo(callGraphEnabled); // propagate coldness but also generate frequency information
    // for blocks if call graph profiling is enabled
 

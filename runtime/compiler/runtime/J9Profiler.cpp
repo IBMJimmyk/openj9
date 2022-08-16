@@ -1641,7 +1641,7 @@ TR_BlockFrequencyInfo::TR_BlockFrequencyInfo(
          TR_ByteCodeInfo &byteCodeInfo = startTree->getNode()->getByteCodeInfo();
          int32_t callSite = byteCodeInfo.getCallerIndex();
          TR_ASSERT(callSite < static_cast<int32_t>(TR_CallSiteInfo::getCurrent(comp)->getNumCallSites() & 0x7FFFFFFF), "Block call site number is unexpected");
-
+	      traceMsg(comp, "RAHIL: block_%d, [%d,%d]\n", node->getNumber(), byteCodeInfo.getCallerIndex(), byteCodeInfo.getByteCodeIndex());
          _blocks[node->getNumber()] = byteCodeInfo;
          }
       else
@@ -1697,6 +1697,8 @@ TR_BlockFrequencyInfo::getFrequencyInfo(
    TR::Node *startNode = block->getEntry()->getNode();
    TR_ByteCodeInfo bci = startNode->getByteCodeInfo();
    bool normalizeForCallers = true;
+   if (comp->getOption(TR_TraceBFGeneration))
+      traceMsg(comp, "RAHIL: In get frequencyInfo for block_%d [%d,%d], node InlinedSiteIndex = %d\n", block->getNumber(), bci.getCallerIndex(), bci.getByteCodeIndex(), startNode->getInlinedSiteIndex());
    if (bci.getCallerIndex() == -10)
       {
       bci.setCallerIndex(comp->getCurrentInlinedSiteIndex());
@@ -1720,6 +1722,8 @@ TR_BlockFrequencyInfo::getFrequencyInfo(
    // Check if the callchain associated with bci matches the call chain from
    // the persistent call site info stored in block frequency info.
    bool isMatchingBCI = true;
+   if (trace)
+      traceMsg(comp,"ZZZ RAHIL IN getFrequencyInfo with normalizedForCallers=%s, queriedCallerIndex = %d for bci %d:%d\n", normalizeForCallers ? "true" : "false" , queriedCallerIndex, bci.getCallerIndex(), bci.getByteCodeIndex());
    if (callerIndex > -1)
       {
       // To make sure we are looking into the correct frequency data,
@@ -1739,6 +1743,8 @@ TR_BlockFrequencyInfo::getFrequencyInfo(
    bciCheck.setCallerIndex(queriedCallerIndex);
 
    int64_t maxCount = normalizeForCallers ? getMaxRawCount() : getMaxRawCount(queriedCallerIndex);
+   if (trace)
+      traceMsg(comp,"ZZZ RAHIL IN getFrequencyInfo with normalizedForCallers=%s, queriedCallerIndex = %d - maxCount was %ld for bci %d:%d\n", normalizeForCallers ? "true" : "false" , queriedCallerIndex, maxCount, bci.getCallerIndex(), bci.getByteCodeIndex());
 
    int32_t frequency = isMatchingBCI ? getRawCount(callerIndex < 0 ? comp->getMethodSymbol() : comp->getInlinedResolvedMethodSymbol(callerIndex), bciCheck, _callSiteInfo, maxCount, comp) : -1;
    if (trace)
@@ -1768,6 +1774,7 @@ TR_BlockFrequencyInfo::getFrequencyInfo(
       // eg find the point where the current profiling info has no profiling data for the given bci
       TR_ByteCodeInfo lastProfiledBCI = bciToCheck;
       int64_t outterProfiledFrequency = getRawCount(comp->getMethodSymbol(), bciToCheck, _callSiteInfo, maxCount, comp);
+      traceMsg(comp, "RAHIL: Checking maxFrequency = %d, outterProfiledFrequency = %d\n",maxCount,outterProfiledFrequency);
       if (outterProfiledFrequency == 0)
          return 0;
 
@@ -1899,6 +1906,7 @@ int32_t
 TR_BlockFrequencyInfo::getRawCount(TR::ResolvedMethodSymbol *resolvedMethod, TR_ByteCodeInfo &bci, TR_CallSiteInfo *callSiteInfo, int64_t maxCount, TR::Compilation *comp)
    {
    int32_t frequency = getRawCount(bci, callSiteInfo, maxCount, comp);
+   traceMsg(comp, "RAHIL: getRawCount before returning Freq = %d, maxCount = %d\n", frequency, maxCount);
    if (frequency > -1 || _counterDerivationInfo == NULL)
       return frequency;
 
@@ -2036,7 +2044,8 @@ TR_BlockFrequencyInfo::getRawCount(TR_ByteCodeInfo &bci, TR_CallSiteInfo *callSi
    //
    int64_t frequency = 0;
    int32_t blocksMatched = 0;
-   bool currentCallSiteInfo = TR_CallSiteInfo::getCurrent(comp) == callSiteInfo;
+   bool currentCallSiteInfo = callSiteInfo != NULL ? TR_CallSiteInfo::getCurrent(comp) == callSiteInfo : false;
+   traceMsg(comp, "RAHIL: In getRawCount to get actual freq, maxCount = %d, we have currentCallSiteInfo = %s\n", maxCount, currentCallSiteInfo ? "true" : "false");
 
    for (uint32_t i = 0; i < _numBlocks; ++i)
       {
@@ -2683,7 +2692,7 @@ TR_PersistentProfileInfo::findOrCreateValueProfileInfo(TR::Compilation *comp)
    return _valueProfileInfo;
    }
 
-void TR_ValueProfileInfo::dumpInfo(TR::FILE *logFile)
+void TR_ValueProfileInfo::dumpInfo(TR::FILE *logFile, TR::Compilation *comp)
    {
    trfprintf(logFile, "\nDumping value profile info\n");
    for (size_t i = 0; i < LastProfiler; ++i)
@@ -2693,22 +2702,27 @@ void TR_ValueProfileInfo::dumpInfo(TR::FILE *logFile)
       }
    }
 
-void TR_BlockFrequencyInfo::dumpInfo(TR::FILE *logFile)
+void TR_BlockFrequencyInfo::dumpInfo(TR::FILE *logFile, TR::Compilation *comp)
    {
    trfprintf(logFile, "\nDumping block frequency info\n");
+   int32_t maxCount = getMaxRawCount();
+   trfprintf(logFile, "\n\tMaximum Count = %d, _numBlocks = %d\n", maxCount, _numBlocks);
    for (int32_t i = 0; i < _numBlocks; i++)
-      trfprintf(logFile, "   Block index = %d, caller = %d, frequency = %d\n", _blocks[i].getByteCodeIndex(), _blocks[i].getCallerIndex(), _frequencies[i]);
+      {
+      trfprintf(logFile, "\nblock_%d, calling the getRawCount\n",i);
+      trfprintf(logFile, " [%d,%d] frequency = %d\n", _blocks[i].getCallerIndex(),  _blocks[i].getByteCodeIndex(), getRawCount(_blocks[i], NULL, maxCount, comp));
+      }
    }
 
 
-void TR_CatchBlockProfileInfo::dumpInfo(TR::FILE *logFile)
+void TR_CatchBlockProfileInfo::dumpInfo(TR::FILE *logFile, TR::Compilation *comp)
    {
    if (_catchCounter || _throwCounter)
       trfprintf(logFile, "\nDumping catch block info\n   catch %7d throw %7d\n", _catchCounter, _throwCounter);
    }
 
 
-void TR_CallSiteInfo::dumpInfo(TR::FILE *logFile)
+void TR_CallSiteInfo::dumpInfo(TR::FILE *logFile, TR::Compilation *comp)
    {
    trfprintf(logFile, "\nDumping call site info\n");
    for (int32_t i = 0; i < _numCallSites; i++)
@@ -2761,19 +2775,19 @@ TR_CallSiteInfo * TR_CallSiteInfo::deserialize(uint8_t * &buffer)
    return new (PERSISTENT_NEW) TR_CallSiteInfo(serializedData, buffer);
    }
 
-void TR_PersistentProfileInfo::dumpInfo(TR::FILE *logFile)
+void TR_PersistentProfileInfo::dumpInfo(TR::FILE *logFile, TR::Compilation *comp)
    {
    if (_callSiteInfo)
-      _callSiteInfo->dumpInfo(logFile);
+      _callSiteInfo->dumpInfo(logFile, comp);
 
    if (_blockFrequencyInfo)
-      _blockFrequencyInfo->dumpInfo(logFile);
+      _blockFrequencyInfo->dumpInfo(logFile, comp);
 
    if (_catchBlockProfileInfo)
-      _catchBlockProfileInfo->dumpInfo(logFile);
+      _catchBlockProfileInfo->dumpInfo(logFile, comp);
 
    if (_valueProfileInfo)
-      _valueProfileInfo->dumpInfo(logFile);
+      _valueProfileInfo->dumpInfo(logFile, comp);
    }
 
 uint32_t TR_PersistentProfileInfo::getSizeForSerialization() const

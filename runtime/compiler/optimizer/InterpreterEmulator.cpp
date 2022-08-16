@@ -1335,7 +1335,7 @@ InterpreterEmulator::updateKnotAndCreateCallSiteUsingInvokeCacheArray(TR_Resolve
                                                                         -1, cpIndex, targetMethod,
                                                                         resolvedSymbol, isIndirectCall, isInterface, *_newBCInfo, comp(),
                                                                         _recursionDepth, allconsts);
-
+   if (comp()->trace(OMR::inlining)) { traceMsg( comp(), "ZZZZZ : IE 2 : TR_DirectCallSite : callsite %p\n", callsite); }
    findTargetAndUpdateInfoForCallsite(callsite, idx);
    }
 
