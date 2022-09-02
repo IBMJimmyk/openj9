@@ -1600,6 +1600,7 @@ TR_J9EstimateCodeSize::realEstimateCodeSize(TR_CallTarget *calltarget, TR_CallSt
                   if (_optimisticSize - origOptimisticSize > bigCalleeThreshold)
                      {
                      ///printf("set warmcallgraphtoobig for method %s at index %d\n", calleeName, newBCInfo._byteCodeIndex);fflush(stdout);
+                     heuristicTrace(tracer(), "zzzwarmcallgraphtoobig _optimisticSize: %d, origOptimisticSize: %d, bigCalleeThreshold: %d\n", _optimisticSize, origOptimisticSize, bigCalleeThreshold);
                      calltarget->_calleeMethod->setWarmCallGraphTooBig( newBCInfo.getByteCodeIndex(), comp());
                      heuristicTrace(tracer(), "set warmcallgraphtoobig for method %s at index %d\n", calleeName, newBCInfo.getByteCodeIndex());
                      //_optimisticSize = origOptimisticSize;
