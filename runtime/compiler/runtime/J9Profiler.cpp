@@ -2409,7 +2409,7 @@ TR_CallSiteInfo::computeEffectiveCallerIndex(TR::Compilation *comp, TR::list<std
       auto itr = callStack.begin(), end = callStack.end();
       while (cursor && itr != end)
          {
-         if (comp->fe()->getInlinedCallSiteMethod(cursor) != itr->first)
+         if (comp->fe()->getInlinedCallSiteMethod(cursor) != itr->first || (itr->second.getByteCodeIndex() != 0 && cursor->_byteCodeInfo.getByteCodeIndex() != itr->second.getByteCodeIndex()))
             break;
 
          if (cursor->_byteCodeInfo.getCallerIndex() > -1)
