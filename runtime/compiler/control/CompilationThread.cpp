@@ -9615,6 +9615,12 @@ TR::CompilationInfoPerThreadBase::compile(
          compiler->failCompilation<TR::CompilationException>("TR_FailPreXRecompile option");
          }
 
+      bool disableVeryHotProfileComp = comp()->getOption(TR_DisableVeryHotProfileComp);
+      if (disableVeryHotProfileComp && (compiler->getMethodHotness() >= veryHot) && compiler->isProfilingCompilation())
+         {
+         compiler->failCompilation<TR::CompilationException>("disableVeryHotProfileComp option");
+         }
+
       // If we want to compile without VM access, now it's the time to release it
       // For the JITClient we must not enter this path. The class unload monitor
       // will not be acquired/released and we'll only release VMaccess when
