@@ -3436,27 +3436,18 @@ J9::ValuePropagation::getParmValues()
                   TR_ASSERT(constraint, "Cannot intersect constraints");
                   }
                }
-            else
+            else if (!TR::Compiler->cls.isInterfaceClass(comp(), opaqueClass)
+                     || comp()->getOption(TR_TrustAllInterfaceTypeInfo))
                {
-               TR_OpaqueClassBlock *erased = NULL;
-               if (isUnreliableSignatureType(opaqueClass, erased))
+               // Interface-typed parameters are not handled here because they
+               // will accept arbitrary objects.
+               TR_OpaqueClassBlock *jlKlass = fe()->getClassClassPointer(opaqueClass);
+               if (jlKlass)
                   {
-                  isClassErased = true;
-                  opaqueClass = erased;
-                  }
-
-               if (opaqueClass != NULL)
-                  {
-                  // Interface-typed parameters are not handled here because they
-                  // will accept arbitrary objects.
-                  TR_OpaqueClassBlock *jlKlass = fe()->getClassClassPointer(opaqueClass);
-                  if (jlKlass)
-                     {
-                     if (opaqueClass != jlKlass)
-                        constraint = TR::VPResolvedClass::create(this, opaqueClass);
-                     else
-                        constraint = TR::VPObjectLocation::create(this, TR::VPObjectLocation::JavaLangClassObject);
-                     }
+                  if (opaqueClass != jlKlass)
+                     constraint = TR::VPResolvedClass::create(this, opaqueClass);
+                  else
+                     constraint = TR::VPObjectLocation::create(this, TR::VPObjectLocation::JavaLangClassObject);
                   }
                }
             }
@@ -3509,23 +3500,6 @@ bool J9::ValuePropagation::transformDirectLoad(TR::Node* node)
       }
 
    return false;
-   }
-
-bool J9::ValuePropagation::isUnreliableSignatureType(
-   TR_OpaqueClassBlock *klass, TR_OpaqueClassBlock *&erased)
-   {
-   erased = klass;
-   if (klass == NULL)
-      return false;
-
-   if (comp()->getOption(TR_TrustAllInterfaceTypeInfo))
-      return false;
-
-   if (!TR::Compiler->cls.isInterfaceClass(comp(), klass))
-      return false;
-
-   erased = NULL;
-   return true;
    }
 
 static void getHelperSymRefs(OMR::ValuePropagation *vp, TR::Node *curCallNode, TR::SymbolReference *&getHelpersSymRef, TR::SymbolReference *&helperSymRef, const char *helperSig, int32_t helperSigLen, TR::MethodSymbol::Kinds helperCallKind)
@@ -3901,7 +3875,7 @@ J9::ValuePropagation::innerConstrainAcall(TR::Node *node)
    TR_OpaqueClassBlock *classBlock = fe()->getClassFromSignature(sig, len, owningMethod);
    TR_OpaqueClassBlock *erased = NULL;
 
-   if (!classBlock || isUnreliableSignatureType(classBlock, erased))
+   if (!classBlock || (TR::Compiler->cls.isInterfaceClass(comp(), classBlock) && !comp()->getOption(TR_TrustAllInterfaceTypeInfo)))
       {
       classBlock = erased;
 
