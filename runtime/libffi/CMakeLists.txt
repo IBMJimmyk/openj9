@@ -113,7 +113,7 @@ if(OMR_ARCH_X86)
 	endif()
 elseif(OMR_ARCH_POWER)
 	if(CMAKE_CXX_COMPILER_ID STREQUAL "XL")
-		set(CMAKE_ASM_FLAGS "-qalias=noansi -qxflag=LTOL:LTOL0 -qxflag=selinux -qarch=ppc64 -q64")
+		set(CMAKE_ASM_FLAGS "-qalias=noansi -qxflag=LTOL:LTOL0 -qxflag=selinux -qarch=ppc64 -q64 -qnoeh")
 	endif()
 	if(OMR_OS_LINUX)
 		target_sources(ffi
