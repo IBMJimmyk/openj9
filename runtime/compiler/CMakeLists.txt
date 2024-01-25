@@ -279,6 +279,7 @@ elseif(OMR_OS_AIX)
 	)
 	if(OMR_ENV_DATA64)
 		list(APPEND J9_SHAREDFLAGS -q64)
+		list(APPEND J9_SHAREDFLAGS -qnoeh)
 		if(OMR_TOOLCONFIG STREQUAL "xlc")
 			# Modify the arch tuning value we inherit from OMR.
 			list(REMOVE_ITEM TR_COMPILE_OPTIONS "-qarch=pwr7")
