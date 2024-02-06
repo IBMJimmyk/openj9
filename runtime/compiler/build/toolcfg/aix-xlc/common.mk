@@ -120,7 +120,7 @@ endif
 
 ifeq (,$(findstring xlclang,$(notdir $(CC))))
   # xlc options
-  CX_FLAGS+=-qnotempinc -qmbcs -qnoeh
+  CX_FLAGS+=-qnotempinc -qmbcs
 else
   # xlclang
   CX_FLAGS+=-qxlcompatmacros

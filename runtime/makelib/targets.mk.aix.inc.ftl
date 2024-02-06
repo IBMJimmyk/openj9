@@ -99,7 +99,7 @@ endif
 
 ifeq (,$(findstring xlclang,$(notdir $(CC))))
   # xlc options
-  CFLAGS += -q mbcs -qinfo=pro -qnoeh
+  CFLAGS += -q mbcs -qinfo=pro
 else
  # xlclang options
   CFLAGS += -qxlcompatmacros
@@ -115,7 +115,7 @@ endif
 
 ifeq (,$(findstring xlclang++,$(notdir $(CXX))))
   # xlc++ options
-  CXXFLAGS += -q mbcs -qinfo=pro -qnoeh
+  CXXFLAGS += -q mbcs -qinfo=pro
 else
   # xlclang++ options
   CXXFLAGS += -qxlcompatmacros -fno-rtti -fno-exceptions
