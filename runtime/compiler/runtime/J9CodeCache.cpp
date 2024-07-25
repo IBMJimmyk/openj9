@@ -313,12 +313,20 @@ void
 J9::CodeCache::onClassRedefinition(TR_OpaqueMethodBlock *oldMethod, TR_OpaqueMethodBlock *newMethod)
    {
    OMR::CodeCacheHashEntry *entry = _resolvedMethodHT->findResolvedMethod(oldMethod);
+   if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+      {
+      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz onClassRedefinition remove - oldMethod: %p, newMethod: %p, entry: %p", oldMethod, newMethod, entry);
+      }
    if (!entry)
       return;
    _resolvedMethodHT->remove(entry);
    entry->_key = _resolvedMethodHT->hashResolvedMethod(newMethod);
    entry->_info._resolved._method = newMethod;
    entry->_info._resolved._currentStartPC = NULL;
+   if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+      {
+      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz onClassRedefinition add - oldMethod: %p, newMethod: %p, entry: %p", oldMethod, newMethod, entry);
+      }
    _resolvedMethodHT->add(entry);
 
    // scope for artifact manager critical section
@@ -408,6 +416,10 @@ J9::CodeCache::resolveHashEntry(OMR::CodeCacheHashEntry *entry, TR_OpaqueMethodB
    entry->_info._resolved._currentTrampoline = NULL;
 
    // insert the entry into the resolved table without any internal allocations
+   if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+      {
+      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz resolveHashEntry add - method: %p, entry: %p", method, entry);
+      }
    _resolvedMethodHT->add(entry);
 
    // scope for artifact manager critical section
