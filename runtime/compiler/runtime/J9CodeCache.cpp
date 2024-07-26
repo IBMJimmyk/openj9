@@ -315,7 +315,7 @@ J9::CodeCache::onClassRedefinition(TR_OpaqueMethodBlock *oldMethod, TR_OpaqueMet
    OMR::CodeCacheHashEntry *entry = _resolvedMethodHT->findResolvedMethod(oldMethod);
    if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
       {
-      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz onClassRedefinition remove - oldMethod: %p, newMethod: %p, entry: %p", oldMethod, newMethod, entry);
+      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz onClassRedefinition remove - _resolvedMethodHT: %p, oldMethod: %p, newMethod: %p, entry: %p", _resolvedMethodHT, oldMethod, newMethod, entry);
       }
    if (!entry)
       return;
@@ -325,7 +325,7 @@ J9::CodeCache::onClassRedefinition(TR_OpaqueMethodBlock *oldMethod, TR_OpaqueMet
    entry->_info._resolved._currentStartPC = NULL;
    if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
       {
-      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz onClassRedefinition add - oldMethod: %p, newMethod: %p, entry: %p", oldMethod, newMethod, entry);
+      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz onClassRedefinition add - _resolvedMethodHT: %p, oldMethod: %p, newMethod: %p, entry: %p", _resolvedMethodHT, oldMethod, newMethod, entry);
       }
    _resolvedMethodHT->add(entry);
 
@@ -418,7 +418,7 @@ J9::CodeCache::resolveHashEntry(OMR::CodeCacheHashEntry *entry, TR_OpaqueMethodB
    // insert the entry into the resolved table without any internal allocations
    if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
       {
-      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz resolveHashEntry add - method: %p, entry: %p", method, entry);
+      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz resolveHashEntry add - _resolvedMethodHT: %p, method: %p, entry: %p", _resolvedMethodHT, method, entry);
       }
    _resolvedMethodHT->add(entry);
 
@@ -696,6 +696,10 @@ J9::CodeCache::adjustTrampolineReservation(TR_OpaqueMethodBlock *method,
       {
       CacheCriticalSection updateReservation(self());
 
+      if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+         {
+         TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz adjustTrampolineReservation - _resolvedMethodHT: %p, method: %p, _unresolvedMethodHT: %p, cp: %p, cpIndex: %d", _resolvedMethodHT, method, _unresolvedMethodHT, cp, cpIndex);
+         }
       unresolvedEntry = _unresolvedMethodHT->findUnresolvedMethod(cp, cpIndex);
       resolvedEntry   = _resolvedMethodHT->findResolvedMethod(method);
 
