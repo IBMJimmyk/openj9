@@ -258,6 +258,10 @@ J9::CodeCache::initialize(TR::CodeCacheManager *manager,
 void
 J9::CodeCache::onClassUnloading(J9ClassLoader *loaderPtr)
    {
+   if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+      {
+      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz onClassUnloading - _resolvedMethodHT: %p", _resolvedMethodHT);
+      }
    OMR::CodeCacheHashEntry *entry, *prev, *next;
    int32_t idx;
 
@@ -732,6 +736,10 @@ J9::CodeCache::onFSDDecompile()
 void
 J9::CodeCache::resetTrampolines()
    {
+   if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+      {
+      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz resetTrampolines - _resolvedMethodHT: %p", _resolvedMethodHT);
+      }
    TR_ASSERT(_manager->codeCacheConfig().needsMethodTrampolines(), "Attempting to purge trampolines when they do not exist");
 
    OMR::CodeCacheHashEntry *entry, *next;

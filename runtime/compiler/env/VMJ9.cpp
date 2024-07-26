@@ -5736,6 +5736,10 @@ TR_J9VMBase::reserveTrampolineIfNecessary(TR::Compilation * comp, TR::SymbolRefe
                newCache = 0;
                if (inBinaryEncoding)
                   {
+                  if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+                     {
+                     TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz reserveTrampolineIfNecessary - cp: %p, cpIndex: %d", cp, cpIndex);
+                     }
                   comp->failCompilation<TR::RecoverableTrampolineError>("Failed to delete the old reservation"); // RAS only
                   }
                else
@@ -7228,6 +7232,10 @@ TR_J9VM::getResolvedTrampoline(TR::Compilation *comp, TR::CodeCache* curCache, J
          newCache = NULL;
          if (inBinaryEncoding)
             {
+            if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+               {
+               TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz getResolvedTrampoline - method: %p", method);
+               }
             comp->failCompilation<TR::RecoverableTrampolineError>("Failed to delete the old reservation");
             }
          else

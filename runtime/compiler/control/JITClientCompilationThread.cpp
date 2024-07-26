@@ -3703,7 +3703,13 @@ remoteCompile(J9VMThread *vmThread, TR::Compilation *compiler, TR_ResolvedMethod
             for (auto& it : methodsRequiringTrampolines)
                {
                if (compInfoPT->reloRuntime()->codeCache()->reserveResolvedTrampoline(it, true) != OMR::CodeCacheErrorCode::ERRORCODE_SUCCESS)
+                  {
+                  if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+                     {
+                     TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz remoteCompile - method: %p", it);
+                     }
                   compiler->failCompilation<TR::RecoverableTrampolineError>("Failed to allocate trampoline in the code cache");
+                  }
                }
             }
 
