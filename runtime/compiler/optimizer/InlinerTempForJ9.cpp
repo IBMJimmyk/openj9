@@ -415,6 +415,15 @@ TR_J9InlinerPolicy::alwaysWorthInlining(TR_ResolvedMethod * calleeMethod, TR::No
       case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
       case TR::sun_misc_Unsafe_copyMemory:
          return !calleeMethod->isNative();
+
+      case TR::jdk_internal_misc_Unsafe_compareAndSetByte:
+      case TR::jdk_internal_misc_Unsafe_compareAndSetShort:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeByte:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeShort:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
+         return false;
       default:
          break;
       }
@@ -2057,6 +2066,13 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
       case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
       case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
       case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
+      case TR::jdk_internal_misc_Unsafe_compareAndSetByte:
+      case TR::jdk_internal_misc_Unsafe_compareAndSetShort:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeByte:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeShort:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          if (callNode->isSafeForCGToFastPathUnsafeCall())
             return false;
          switch (callerSymbol->castToMethodSymbol()->getRecognizedMethod())
