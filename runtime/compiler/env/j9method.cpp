@@ -5553,7 +5553,7 @@ TR_J9MethodBase::isUnsafeCAS(TR::Compilation * c)
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-         if (!c->target().cpu.isPower())
+         if (!(c->target().cpu.isPower() || c->target().cpu.isX86()))
             {
             break;
             }
@@ -5854,7 +5854,7 @@ TR_J9MethodBase::isUnsafePut(TR::RecognizedMethod rm)
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-         if (!TR::comp()->target().cpu.isPower())
+         if (!(TR::comp()->target().cpu.isPower() || TR::comp()->target().cpu.isX86()))
             {
             break;
             }

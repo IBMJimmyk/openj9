@@ -423,7 +423,7 @@ TR_J9InlinerPolicy::alwaysWorthInlining(TR_ResolvedMethod * calleeMethod, TR::No
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-         if (!comp()->target().cpu.isPower())
+         if (!(comp()->target().cpu.isPower() || comp()->target().cpu.isX86()))
             {
             break;
             }
@@ -2078,7 +2078,7 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-         if (disableCASIntrinsic || !comp()->target().cpu.isPower())
+         if (disableCASIntrinsic || !(comp()->target().cpu.isPower() || comp()->target().cpu.isX86()))
             {
             break;
             }

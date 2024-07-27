@@ -12293,7 +12293,7 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
             }
          break;
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
-        if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
+        if (comp->target().is64Bit() && (node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
             static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
             if (!enableCASIntrinsic)
@@ -12302,6 +12302,10 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
                }
             resultReg = VMinlineCompareAndSetOrExchange(node, cg, 8, true);
             return true;
+            }
+         else if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
+            {
+            //TODO: 32 bit system case here
             }
          break;
 
