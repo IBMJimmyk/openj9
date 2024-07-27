@@ -661,7 +661,9 @@ J9::CodeGenerator::lowerTreesPreChildrenVisit(TR::Node *parent, TR::TreeTop *tre
          // In Java9 Unsafe could be the jdk.internal JNI method or the sun.misc ordinary method wrapper,
          // while in Java8 it can only be the sun.misc package which will itself contain the JNI method.
          // Test for isNative to distinguish between them.
-         if ((methodSymbol->getRecognizedMethod() == TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z) &&
+         if (((methodSymbol->getRecognizedMethod() == TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z) ||
+              (methodSymbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_compareAndExchangeObject) ||
+              (methodSymbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_compareAndExchangeReference)) &&
                methodSymbol->isNative() &&
                (!TR::Compiler->om.canGenerateArraylets() || parent->isUnsafeGetPutCASCallOnNonArray()) && parent->isSafeForCGToFastPathUnsafeCall())
             {

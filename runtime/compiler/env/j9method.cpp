@@ -2984,10 +2984,10 @@ void TR_ResolvedJ9Method::construct()
       {x(TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z, "compareAndSetObject", "(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z")},
       {x(TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z, "compareAndSetReference", "(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z")},
 
-      {x(TR::sun_misc_Unsafe_compareAndExchangeInt_jlObjectJII_Z,                  "compareAndExchangeInt",    "(Ljava/lang/Object;JII)I")},
-      {x(TR::sun_misc_Unsafe_compareAndExchangeLong_jlObjectJJJ_Z,                 "compareAndExchangeLong",   "(Ljava/lang/Object;JJJ)J")},
-      {x(TR::sun_misc_Unsafe_compareAndExchangeObject_jlObjectJjlObjectjlObject_Z, "compareAndExchangeObject", "(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")},
-      {x(TR::sun_misc_Unsafe_compareAndExchangeObject_jlObjectJjlObjectjlObject_Z, "compareAndExchangeReference", "(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")},
+      {x(TR::jdk_internal_misc_Unsafe_compareAndExchangeInt,       "compareAndExchangeInt",       "(Ljava/lang/Object;JII)I")},
+      {x(TR::jdk_internal_misc_Unsafe_compareAndExchangeLong,      "compareAndExchangeLong",      "(Ljava/lang/Object;JJJ)J")},
+      {x(TR::jdk_internal_misc_Unsafe_compareAndExchangeObject,    "compareAndExchangeObject",    "(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")},
+      {x(TR::jdk_internal_misc_Unsafe_compareAndExchangeReference, "compareAndExchangeReference", "(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")},
 
       {x(TR::sun_misc_Unsafe_staticFieldBase,               "staticFieldBase",   "(Ljava/lang/reflect/Field;)Ljava/lang/Object")},
       {x(TR::sun_misc_Unsafe_staticFieldOffset,             "staticFieldOffset", "(Ljava/lang/reflect/Field;)J")},
@@ -4990,6 +4990,11 @@ TR_ResolvedJ9Method::setRecognizedMethodInfo(TR::RecognizedMethod rm)
             // from bool TR::TreeEvaluator::VMinlineCallEvaluator(TR::Node *node, bool isIndirect, TR::CodeGenerator *cg)
             //case TR::sun_misc_Unsafe_copyMemory:
 
+            case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
+            case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+            case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
+            case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
+
             case TR::sun_misc_Unsafe_loadFence:
             case TR::sun_misc_Unsafe_storeFence:
             case TR::sun_misc_Unsafe_fullFence:
@@ -5533,6 +5538,14 @@ TR_J9MethodBase::isUnsafeCAS(TR::Compilation * c)
    TR::RecognizedMethod rm = getRecognizedMethod();
    switch (rm)
       {
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
+         if (!(c->target().cpu.isPower() || c->target().cpu.isX86()))
+            {
+            break;
+            }
       case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
       case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
       case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
@@ -5823,6 +5836,14 @@ TR_J9MethodBase::isUnsafePut(TR::RecognizedMethod rm)
    {
    switch (rm)
       {
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
+         if (!(TR::comp()->target().cpu.isPower() || TR::comp()->target().cpu.isX86()))
+            {
+            break;
+            }
       case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
       case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
       case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:

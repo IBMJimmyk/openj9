@@ -410,11 +410,20 @@ TR_J9InlinerPolicy::alwaysWorthInlining(TR_ResolvedMethod * calleeMethod, TR::No
       // JNI impl, we need to differentiate by testing with isNative(). If it is
       // native, then we don't need to inline it as it will be handled
       // elsewhere.
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
+         if (!(comp()->target().cpu.isPower() || comp()->target().cpu.isX86()))
+            {
+            break;
+            }
       case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
       case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
       case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
       case TR::sun_misc_Unsafe_copyMemory:
          return !calleeMethod->isNative();
+
       default:
          break;
       }
@@ -1393,7 +1402,7 @@ TR_J9InlinerPolicy::createUnsafeMonitorOp(TR::ResolvedMethodSymbol *calleeSymbol
    }
 
 bool
-TR_J9InlinerPolicy::createUnsafeCASCallDiamond( TR::TreeTop *callNodeTreeTop, TR::Node *callNode)
+TR_J9InlinerPolicy::createUnsafeCASCallDiamond(TR::TreeTop *callNodeTreeTop, TR::Node *callNode)
    {
    // This method is used to create an if diamond around a call to any of the unsafe compare and swap methods
    // Codegens have a fast path for the compare and swaps, but cannot deal with the case where the offset value passed in to a the CAS is low tagged
@@ -1889,6 +1898,7 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
        !comp()->fej9()->traceableMethodsCanBeInlined()))
       return false;
 
+   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
    // I am not sure if having the same type between C/S and B/Z matters here.. ie. if the type is being used as the only distinguishing factor
    switch (callNode->getSymbol()->castToResolvedMethodSymbol()->getRecognizedMethod())
       {
@@ -2054,6 +2064,14 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
       case TR::sun_misc_Unsafe_objectFieldOffset:
          return false; // todo
 
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
+         if (disableCAEIntrinsic || !(comp()->target().cpu.isPower() || comp()->target().cpu.isX86()))
+            {
+            break;
+            }
       case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
       case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
       case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
