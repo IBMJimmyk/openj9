@@ -5549,6 +5549,10 @@ TR_RelocationRecordResolvedTrampolines::applyRelocation(TR_RelocationRuntime *re
       RELO_LOG(reloRuntime->reloLogger(), 6, "\t\tapplyRelocation: aborting AOT relocation because trampoline was not reserved. Will be retried.\n");
       return TR_RelocationErrorCode::trampolineRelocationFailure;
       }
+   if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+      {
+      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz applyRelocation - _resolvedMethodHT: %p, method: %p, compMethod: %s", reloRuntime->codeCache()->_resolvedMethodHT, method, reloRuntime->comp()->signature());
+      }
 
    return TR_RelocationErrorCode::relocationOK;
    }

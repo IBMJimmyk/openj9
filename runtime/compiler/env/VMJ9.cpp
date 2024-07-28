@@ -7186,6 +7186,10 @@ TR_J9VM::getResolvedTrampoline(TR::Compilation *comp, TR::CodeCache* curCache, J
    TR::CodeCache* newCache = curCache; // optimistically assume as can allocate from current code cache
 
    int32_t retValue = curCache->reserveResolvedTrampoline((TR_OpaqueMethodBlock *)method, inBinaryEncoding);
+   if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+      {
+      TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz getResolvedTrampoline current - _resolvedMethodHT: %p, method: %p, compMethod: %s", curCache->_resolvedMethodHT, method, comp->signature());
+      }
    if (retValue != OMR::CodeCacheErrorCode::ERRORCODE_SUCCESS)
       {
       curCache->unreserve();  // delete the old reservation
@@ -7215,6 +7219,10 @@ TR_J9VM::getResolvedTrampoline(TR::Compilation *comp, TR::CodeCache* curCache, J
                      newCache = NULL;
                      comp->failCompilation<TR::TrampolineError>("Failed to reserve resolved trampoline");
                      }
+                  if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
+                     {
+                     TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz getResolvedTrampoline new - _resolvedMethodHT: %p, method: %p, compMethod: %s", newCache->_resolvedMethodHT, method, comp->signature());
+                     }
                   }
                }
             else
@@ -7234,7 +7242,7 @@ TR_J9VM::getResolvedTrampoline(TR::Compilation *comp, TR::CodeCache* curCache, J
             {
             if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseCompileEnd))
                {
-               TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz getResolvedTrampoline - method: %p", method);
+               TR_VerboseLog::writeLineLocked(TR_Vlog_INFO, "zzz getResolvedTrampoline - _resolvedMethodHT: %p, method: %p, compMethod: %s", curCache->_resolvedMethodHT, method, comp->signature());
                }
             comp->failCompilation<TR::RecoverableTrampolineError>("Failed to delete the old reservation");
             }
