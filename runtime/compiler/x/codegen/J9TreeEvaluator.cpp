@@ -9539,18 +9539,18 @@ static TR::Register* inlineCompareAndSwapObjectNative(TR::Node* node, TR::CodeGe
    deps->addPostCondition(EAX, TR::RealRegister::eax, cg);
    generateMemRegInstruction(use64BitClasses ? TR::InstOpCode::LCMPXCHG8MemReg : TR::InstOpCode::LCMPXCHG4MemReg, node, generateX86MemoryReference(object, offset, 0, cg), tmp, deps, cg);
 
-   if (!isExchange)
-      {
-      generateRegInstruction(TR::InstOpCode::SETE1Reg, node, result, cg);
-      generateRegRegInstruction(TR::InstOpCode::MOVZXReg4Reg1, node, result, result, cg);
-      }
-   else
+   if (isExchange)
       {
       result = EAX;
       if (TR::Compiler->om.compressedReferenceShiftOffset() != 0)
          {
          generateRegImmInstruction(TR::InstOpCode::SHLRegImm1(), node, EAX, TR::Compiler->om.compressedReferenceShiftOffset(), cg);
          }
+      }
+   else
+      {
+      generateRegInstruction(TR::InstOpCode::SETE1Reg, node, result, cg);
+      generateRegRegInstruction(TR::InstOpCode::MOVZXReg4Reg1, node, result, result, cg);
       }
 
    // Non-realtime: Generate a write barrier for this kind of object.
@@ -9597,8 +9597,7 @@ inlineCompareAndSwapNative(
       int8_t size,
       bool isObject,
       bool isExchange,
-      TR::CodeGenerator *cg,
-      bool nativeCheck)
+      TR::CodeGenerator *cg)
    {
    TR::Node *firstChild    = node->getFirstChild();
    TR::Node *objectChild   = node->getSecondChild();
@@ -9627,12 +9626,6 @@ inlineCompareAndSwapNative(
    //
    switch (size)
       {
-      case 1:
-         op = TR::InstOpCode::LCMPXCHG1MemReg;
-         break;
-      case 2:
-         op = TR::InstOpCode::LCMPXCHG2MemReg;
-         break;
       case 4:
          op = TR::InstOpCode::LCMPXCHG4MemReg;
          break;
@@ -9651,7 +9644,7 @@ inlineCompareAndSwapNative(
             }
          break;
       default:
-         //TODO:assert fatal. Unknown data size.
+         TR_ASSERT_FATAL_WITH_NODE(node, false, "Unknown dataSize: %d\n", size);
          return false;
       }
 
@@ -9663,7 +9656,7 @@ inlineCompareAndSwapNative(
    // differentiate between these cases by testing with isNative() on the method.
    {
       TR::MethodSymbol *methodSymbol = node->getSymbol()->getMethodSymbol();
-      if (nativeCheck && methodSymbol && !methodSymbol->isNative())
+      if (methodSymbol && !methodSymbol->isNative())
          return false;
    }
 
@@ -9733,10 +9726,6 @@ inlineCompareAndSwapNative(
    TR::Register *oldValueRegister;
    switch (size)
       {
-      case 1:
-      case 2:
-         oldValueRegister = cg->shortClobberEvaluate(oldValueChild); //TODO: is this okay for byte data?
-         break;
       case 4:
          oldValueRegister = cg->intClobberEvaluate(oldValueChild);
          break;
@@ -9744,7 +9733,7 @@ inlineCompareAndSwapNative(
          oldValueRegister = cg->longClobberEvaluate(oldValueChild);
          break;
       default:
-         //TODO: Assert fatal
+         TR_ASSERT_FATAL_WITH_NODE(node, false, "Unknown dataSize: %d\n", size);
          break;
       }
    bool killOldValueRegister = (oldValueChild->getReferenceCount() > 1) ? true : false;
@@ -9856,7 +9845,7 @@ inlineCompareAndSwapNative(
    if (storeAddressRegForRealTime)
       scratchRegisterManagerForRealTime->reclaimScratchRegister(storeAddressRegForRealTime);
 
-   //TODO: fix return value for exchange, be careful with 64 bit value on a 32 bit system
+   //TODO: test 64 bit return value on 32 bit
    if (!isExchange)
       {
       resultReg = cg->allocateRegister();
@@ -9997,28 +9986,16 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
                return true;
                }
             return false; // Call the native version of NativeThread.current()
-         case TR::jdk_internal_misc_Unsafe_compareAndSetByte:
-            {
-            if (enableCASIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
-               return inlineCompareAndSwapNative(node, 1, false, false, cg, false);
-            }
-            break;
-         case TR::jdk_internal_misc_Unsafe_compareAndSetShort:
-            {
-            if (enableCASIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
-               return inlineCompareAndSwapNative(node, 2, false, false, cg, false);
-            }
-            break;
          case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
             {
             if (enableCASIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
-               return inlineCompareAndSwapNative(node, 4, false, false, cg, true);
+               return inlineCompareAndSwapNative(node, 4, false, false, cg);
             }
             break;
          case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
             {
             if (enableCASIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
-               return inlineCompareAndSwapNative(node, 8, false, false, cg, true);
+               return inlineCompareAndSwapNative(node, 8, false, false, cg);
             }
             break;
          case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
@@ -10027,7 +10004,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
             if (enableCASIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
                {
                if (UseOldCompareAndSwapObject)
-                  return inlineCompareAndSwapNative(node, (comp->target().is64Bit() && !comp->useCompressedPointers()) ? 8 : 4, true, false, cg, true);
+                  return inlineCompareAndSwapNative(node, (comp->target().is64Bit() && !comp->useCompressedPointers()) ? 8 : 4, true, false, cg);
                else
                   {
                   inlineCompareAndSwapObjectNative(node, cg, false);
@@ -10036,28 +10013,16 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
                }
             }
             break;
-         case TR::jdk_internal_misc_Unsafe_compareAndExchangeByte:
-            {
-            if (enableCASIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
-               return inlineCompareAndSwapNative(node, 1, false, true, cg, false);
-            }
-            break;
-         case TR::jdk_internal_misc_Unsafe_compareAndExchangeShort:
-            {
-            if (enableCASIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
-               return inlineCompareAndSwapNative(node, 2, false, true, cg, false);
-            }
-            break;
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
             {
             if (enableCASIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
-               return inlineCompareAndSwapNative(node, 4, false, true, cg, true);
+               return inlineCompareAndSwapNative(node, 4, false, true, cg);
             }
             break;
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
             {
             if (enableCASIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
-               return inlineCompareAndSwapNative(node, 8, false, true, cg, true);
+               return inlineCompareAndSwapNative(node, 8, false, true, cg);
             }
             break;
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
@@ -10066,7 +10031,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
             if (enableCASIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
                {
                if (UseOldCompareAndSwapObject)
-                  return inlineCompareAndSwapNative(node, (comp->target().is64Bit() && !comp->useCompressedPointers()) ? 8 : 4, true, true, cg, true);
+                  return inlineCompareAndSwapNative(node, (comp->target().is64Bit() && !comp->useCompressedPointers()) ? 8 : 4, true, true, cg);
                else
                   {
                   inlineCompareAndSwapObjectNative(node, cg, true);

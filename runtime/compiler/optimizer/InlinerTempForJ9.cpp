@@ -410,16 +410,6 @@ TR_J9InlinerPolicy::alwaysWorthInlining(TR_ResolvedMethod * calleeMethod, TR::No
       // JNI impl, we need to differentiate by testing with isNative(). If it is
       // native, then we don't need to inline it as it will be handled
       // elsewhere.
-      case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
-      case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
-      case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
-      case TR::sun_misc_Unsafe_copyMemory:
-         return !calleeMethod->isNative();
-
-      case TR::jdk_internal_misc_Unsafe_compareAndSetByte:
-      case TR::jdk_internal_misc_Unsafe_compareAndSetShort:
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeByte:
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeShort:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
@@ -427,10 +417,12 @@ TR_J9InlinerPolicy::alwaysWorthInlining(TR_ResolvedMethod * calleeMethod, TR::No
             {
             break;
             }
-         else
-            {
-            return !calleeMethod->isNative();
-            }
+      case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
+      case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
+      case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
+      case TR::sun_misc_Unsafe_copyMemory:
+         return !calleeMethod->isNative();
+
       default:
          break;
       }
@@ -1482,7 +1474,7 @@ TR_J9InlinerPolicy::createUnsafeCASCallDiamond( TR::TreeTop *callNodeTreeTop, TR
 
       }
 
-   TR::DebugCounter::prependDebugCounter(comp(), "zzzFastPathUnsafeCall", branchTargetTree);
+   TR::DebugCounter::prependDebugCounter(comp(), "zzzFastPathUnsafeCall", branchTargetTree); //TODO: remove this
 
 
    return true;
@@ -2072,10 +2064,6 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
       case TR::sun_misc_Unsafe_objectFieldOffset:
          return false; // todo
 
-      case TR::jdk_internal_misc_Unsafe_compareAndSetByte:
-      case TR::jdk_internal_misc_Unsafe_compareAndSetShort:
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeByte:
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeShort:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
@@ -2390,24 +2378,6 @@ bool TR_J9InlinerPolicy::tryToInlineTrivialMethod (TR_CallStack* callStack, TR_C
             guard->_kind = TR_NoGuard;
          }
       return true;
-      }
-   else if (!TR::Compiler->om.canGenerateArraylets() || (callNode && callNode->isUnsafeGetPutCASCallOnNonArray()))
-      {
-      switch (calleeSymbol->getResolvedMethod()->getRecognizedMethod())
-         {
-         case TR::jdk_internal_misc_Unsafe_compareAndSetByte:
-         case TR::jdk_internal_misc_Unsafe_compareAndSetShort:
-         case TR::jdk_internal_misc_Unsafe_compareAndExchangeByte:
-         case TR::jdk_internal_misc_Unsafe_compareAndExchangeShort:
-            if (inlineUnsafeCall(calleeSymbol, callerSymbol, callNodeTreeTop, callNode))
-               {
-               guard->_kind = TR_NoGuard;
-               return true;
-               }
-            break;
-         default:
-            break;
-         }
       }
 
    return false;

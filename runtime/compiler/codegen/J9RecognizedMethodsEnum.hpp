@@ -457,12 +457,6 @@
    sun_misc_Unsafe_allocateUninitializedArray0,
 
    //TODO: reorder if needed
-   jdk_internal_misc_Unsafe_compareAndSetByte,
-   jdk_internal_misc_Unsafe_compareAndSetShort,
-
-   //TODO: reorder if needed
-   jdk_internal_misc_Unsafe_compareAndExchangeByte,
-   jdk_internal_misc_Unsafe_compareAndExchangeShort,
    jdk_internal_misc_Unsafe_compareAndExchangeInt,
    jdk_internal_misc_Unsafe_compareAndExchangeLong,
    jdk_internal_misc_Unsafe_compareAndExchangeReference,

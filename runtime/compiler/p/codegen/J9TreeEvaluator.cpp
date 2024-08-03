@@ -8074,18 +8074,6 @@ static TR::Register *genCAS(TR::Node *node, TR::CodeGenerator *cg, TR::Register 
    TR::InstOpCode::Mnemonic reservedLoadOpCode, conditionalStoreOpCode, compareOpCode, compareImmOpCode;
    switch (dataSize)
       {
-      case 1:
-         reservedLoadOpCode = TR::InstOpCode::lbarx;
-         conditionalStoreOpCode = TR::InstOpCode::stbcx_r;
-         compareOpCode = TR::InstOpCode::cmpl4;
-         compareImmOpCode = TR::InstOpCode::cmpli4;
-         break;
-      case 2:
-         reservedLoadOpCode = TR::InstOpCode::lharx;
-         conditionalStoreOpCode = TR::InstOpCode::sthcx_r;
-         compareOpCode = TR::InstOpCode::cmpl4;
-         compareImmOpCode = TR::InstOpCode::cmpli4;
-         break;
       case 4:
          reservedLoadOpCode = TR::InstOpCode::lwarx;
          conditionalStoreOpCode = TR::InstOpCode::stwcx_r;
@@ -8105,7 +8093,7 @@ static TR::Register *genCAS(TR::Node *node, TR::CodeGenerator *cg, TR::Register 
 
    // Memory barrier --- NOTE: we should be able to do a test upfront to save this barrier,
    //                          but Hursley advised to be conservative due to lack of specification.
-   generateInstruction(cg, TR::InstOpCode::lwsync, node); //TODO: is this needed? Might be a performance problem
+   generateInstruction(cg, TR::InstOpCode::lwsync, node);
 
    TR::LabelSymbol *loopLabel = generateLabelSymbol(cg);
    generateLabelInstruction(cg, TR::InstOpCode::label, node, loopLabel);
@@ -8175,6 +8163,8 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
    else
       {
       offsetReg = cg->evaluate(thirdChild);
+
+      /* Assume that the offset is positive and not pathologically large (i.e., > 2^31). */
       if (comp->target().is32Bit())
          offsetReg = offsetReg->getLowOrder();
       }
@@ -8183,14 +8173,6 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
       {
       switch (dataSize)
          {
-         case 1:
-            oldValue = fourthChild->getByte() & 0xFF;
-            oldValueInReg = false;
-            break;
-         case 2:
-            oldValue = fourthChild->getShortInt() & 0xFFFF;
-            oldValueInReg = false;
-            break;
          case 4:
             oldValue = fourthChild->getInt();
             if (oldValue >= LOWER_IMMED && oldValue <= UPPER_IMMED)
@@ -8213,20 +8195,7 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
 
    if (oldValueInReg)
       {
-      if (1 == dataSize)
-         {
-         oldVReg = cg->gprClobberEvaluate(fourthChild);
-         generateTrg1Src1Imm2Instruction(cg, TR::InstOpCode::rlwinm, node, oldVReg, oldVReg, 0, 0xff);
-         }
-      else if (2 == dataSize)
-         {
-         oldVReg = cg->gprClobberEvaluate(fourthChild);
-         generateTrg1Src1Imm2Instruction(cg, TR::InstOpCode::rlwinm, node, oldVReg, oldVReg, 0, 0xffff);
-         }
-      else
-         {
-         oldVReg = cg->evaluate(fourthChild);
-         }
+      oldVReg = cg->evaluate(fourthChild);
       }
 
    newVReg = cg->evaluate(fifthChild);
@@ -8262,10 +8231,6 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
 
    generateDepLabelInstruction(cg, TR::InstOpCode::label, node, doneLabel, conditions);
 
-   if (oldValueInReg && ((1 == dataSize) || (2 == dataSize)))
-      {
-      cg->stopUsingRegister(oldVReg);
-      }
    cg->stopUsingRegister(cndReg);
    cg->recursivelyDecReferenceCount(firstChild);
    cg->decReferenceCount(secondChild);
@@ -12218,69 +12183,12 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
             }
          break;
 
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
-            {
-            static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
-            if (!enableCASIntrinsic)
-               {
-               break;
-               }
-            resultReg = VMinlineCompareAndSetOrExchangeReference(node, cg, true);
-            return true;
-            }
-         break;
-
       //TODO: combine cases and just select for type and exchange
-      case TR::jdk_internal_misc_Unsafe_compareAndSetByte:
-        if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
-            {
-            static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
-            if (!enableCASIntrinsic)
-               {
-               break;
-               }
-            resultReg = VMinlineCompareAndSetOrExchange(node, cg, 1, false);
-            return true;
-            }
-         break;
-      case TR::jdk_internal_misc_Unsafe_compareAndSetShort:
-        if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
-            {
-            static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
-            if (!enableCASIntrinsic)
-               {
-               break;
-               }
-            resultReg = VMinlineCompareAndSetOrExchange(node, cg, 2, false);
-            return true;
-            }
-         break;
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeByte:
-        if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
-            {
-            static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
-            if (!enableCASIntrinsic)
-               {
-               break;
-               }
-            resultReg = VMinlineCompareAndSetOrExchange(node, cg, 1, true);
-            return true;
-            }
-         break;
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeShort:
-        if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
-            {
-            static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
-            if (!enableCASIntrinsic)
-               {
-               break;
-               }
-            resultReg = VMinlineCompareAndSetOrExchange(node, cg, 2, true);
-            return true;
-            }
-         break;
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
+         // As above, we only want to inline the JNI methods, so add an explicit test for isNative()
+         if (!methodSymbol->isNative())
+            break;
+
         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
             static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
@@ -12292,7 +12200,12 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
             return true;
             }
          break;
+
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+         // As above, we only want to inline the JNI methods, so add an explicit test for isNative()
+         if (!methodSymbol->isNative())
+            break;
+
         if (comp->target().is64Bit() && (node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
             static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
@@ -12306,6 +12219,23 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
          else if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
             //TODO: 32 bit system case here
+            }
+         break;
+
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
+         // As above, we only want to inline the JNI methods, so add an explicit test for isNative()
+         if (!methodSymbol->isNative())
+            break;
+
+         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
+            {
+            static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
+            if (!enableCASIntrinsic)
+               {
+               break;
+               }
+            resultReg = VMinlineCompareAndSetOrExchangeReference(node, cg, true);
+            return true;
             }
          break;
 
