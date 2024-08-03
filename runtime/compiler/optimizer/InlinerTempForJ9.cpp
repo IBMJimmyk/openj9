@@ -429,7 +429,7 @@ TR_J9InlinerPolicy::alwaysWorthInlining(TR_ResolvedMethod * calleeMethod, TR::No
             }
          else
             {
-            return false;
+            return !calleeMethod->isNative();
             }
       default:
          break;
@@ -1482,6 +1482,7 @@ TR_J9InlinerPolicy::createUnsafeCASCallDiamond( TR::TreeTop *callNodeTreeTop, TR
 
       }
 
+   TR::DebugCounter::prependDebugCounter(comp(), "zzzFastPathUnsafeCall", branchTargetTree);
 
 
    return true;
@@ -2389,6 +2390,24 @@ bool TR_J9InlinerPolicy::tryToInlineTrivialMethod (TR_CallStack* callStack, TR_C
             guard->_kind = TR_NoGuard;
          }
       return true;
+      }
+   else if (!TR::Compiler->om.canGenerateArraylets() || (callNode && callNode->isUnsafeGetPutCASCallOnNonArray()))
+      {
+      switch (calleeSymbol->getResolvedMethod()->getRecognizedMethod())
+         {
+         case TR::jdk_internal_misc_Unsafe_compareAndSetByte:
+         case TR::jdk_internal_misc_Unsafe_compareAndSetShort:
+         case TR::jdk_internal_misc_Unsafe_compareAndExchangeByte:
+         case TR::jdk_internal_misc_Unsafe_compareAndExchangeShort:
+            if (inlineUnsafeCall(calleeSymbol, callerSymbol, callNodeTreeTop, callNode))
+               {
+               guard->_kind = TR_NoGuard;
+               return true;
+               }
+            break;
+         default:
+            break;
+         }
       }
 
    return false;
