@@ -9443,7 +9443,6 @@ static TR::Register* inlineIntrinsicIndexOf(TR::Node* node, TR::CodeGenerator* c
  */
 static TR::Register* inlineCompareAndSwapObjectNative(TR::Node* node, TR::CodeGenerator* cg, bool isExchange)
    {
-   //TODO: add native check?
    TR::Compilation *comp = cg->comp();
 
    TR_ASSERT(!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray(), "This evaluator does not support arraylets.");
@@ -9542,6 +9541,7 @@ static TR::Register* inlineCompareAndSwapObjectNative(TR::Node* node, TR::CodeGe
    if (isExchange)
       {
       result = EAX;
+      result->setContainsCollectedReference();
       if (TR::Compiler->om.compressedReferenceShiftOffset() != 0)
          {
          generateRegImmInstruction(TR::InstOpCode::SHLRegImm1(), node, EAX, TR::Compiler->om.compressedReferenceShiftOffset(), cg);
@@ -9675,7 +9675,6 @@ inlineCompareAndSwapNative(
       {
       offsetReg = cg->evaluate(offsetChild);
 
-      //TODO: is this always okay? What happens if it isn't?
       // Assume that the offset is positive and not pathologically large (i.e., > 2^31).
       //
       if (comp->target().is32Bit())
@@ -9835,6 +9834,10 @@ inlineCompareAndSwapNative(
       {
       killOldValueRegister = false;
       resultReg = oldValueRegister;
+      if (isObject)
+         {
+         resultReg->setContainsCollectedReference();
+         }
       }
 
    if (killOldValueRegister)
@@ -9876,7 +9879,14 @@ inlineCompareAndSwapNative(
    node->setRegister(resultReg);
 
    cg->decReferenceCount(objectChild);
-   cg->decReferenceCount(offsetChild);
+   if (offsetReg)
+      {
+      cg->decReferenceCount(offsetChild);
+      }
+   else
+      {
+      cg->recursivelyDecReferenceCount(offsetChild); //TODO: test this
+      }
    cg->decReferenceCount(oldValueChild);
    cg->decReferenceCount(newValueChild);
    if (bumpedRefCount)
