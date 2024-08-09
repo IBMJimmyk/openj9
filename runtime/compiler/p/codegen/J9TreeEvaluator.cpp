@@ -12251,6 +12251,7 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
             }
          break;
 
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          // As above, we only want to inline the JNI methods, so add an explicit test for isNative()
          if (!methodSymbol->isNative())

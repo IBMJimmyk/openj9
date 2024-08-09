@@ -2986,6 +2986,7 @@ void TR_ResolvedJ9Method::construct()
 
       {x(TR::jdk_internal_misc_Unsafe_compareAndExchangeInt,       "compareAndExchangeInt",       "(Ljava/lang/Object;JII)I")},
       {x(TR::jdk_internal_misc_Unsafe_compareAndExchangeLong,      "compareAndExchangeLong",      "(Ljava/lang/Object;JJJ)J")},
+      {x(TR::jdk_internal_misc_Unsafe_compareAndExchangeObject,    "compareAndExchangeObject",    "(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")},
       {x(TR::jdk_internal_misc_Unsafe_compareAndExchangeReference, "compareAndExchangeReference", "(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")},
 
       {x(TR::sun_misc_Unsafe_staticFieldBase,               "staticFieldBase",   "(Ljava/lang/reflect/Field;)Ljava/lang/Object")},
@@ -4991,6 +4992,7 @@ TR_ResolvedJ9Method::setRecognizedMethodInfo(TR::RecognizedMethod rm)
 
             case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
             case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+            case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
             case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
 
             case TR::sun_misc_Unsafe_loadFence:
@@ -5538,6 +5540,7 @@ TR_J9MethodBase::isUnsafeCAS(TR::Compilation * c)
       {
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          if (!(c->target().cpu.isPower() || c->target().cpu.isX86()))
             {
@@ -5835,6 +5838,7 @@ TR_J9MethodBase::isUnsafePut(TR::RecognizedMethod rm)
       {
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          if (!(TR::comp()->target().cpu.isPower() || TR::comp()->target().cpu.isX86()))
             {

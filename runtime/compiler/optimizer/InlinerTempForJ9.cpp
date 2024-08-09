@@ -412,6 +412,7 @@ TR_J9InlinerPolicy::alwaysWorthInlining(TR_ResolvedMethod * calleeMethod, TR::No
       // elsewhere.
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          if (!(comp()->target().cpu.isPower() || comp()->target().cpu.isX86()))
             {
@@ -1474,7 +1475,8 @@ TR_J9InlinerPolicy::createUnsafeCASCallDiamond(TR::TreeTop *callNodeTreeTop, TR:
 
       }
 
-   TR::DebugCounter::prependDebugCounter(comp(), "zzzFastPathUnsafeCall", branchTargetTree); //TODO: remove this
+   TR::DebugCounter::prependDebugCounter(comp(), TR::DebugCounter::debugCounterName(comp(), "zzzFastPathUnsafeCall"), branchTargetTree); //TODO: remove this
+   TR::DebugCounter::prependDebugCounter(comp(), TR::DebugCounter::debugCounterName(comp(), "yyyFastPathUnsafeCall/(%s)/%p", comp()->signature(), branchTargetTree->getNode()), branchTargetTree); //TODO: remove this
 
 
    return true;
@@ -2066,6 +2068,7 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
 
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          if (disableCASIntrinsic || !(comp()->target().cpu.isPower() || comp()->target().cpu.isX86()))
             {
