@@ -12938,7 +12938,8 @@ TR::Register *J9::Power::TreeEvaluator::arraycopyEvaluator(TR::Node *node, TR::C
 
    // This section calculates the number of dependencies needed by the assembly helpers path.
    bool postP10Copy = cg->comp()->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P10) &&
-                      cg->comp()->target().cpu.supportsFeature(OMR_FEATURE_PPC_HAS_VSX);
+                      cg->comp()->target().cpu.supportsFeature(OMR_FEATURE_PPC_HAS_VSX) &&
+                      !comp->target().is32Bit();
 
    static bool disableVSXArrayCopy = (feGetEnv("TR_disableVSXArrayCopy") != NULL);
    bool useVSXForCopy  = cg->comp()->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P8) &&
