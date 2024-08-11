@@ -1900,7 +1900,7 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
        !comp()->fej9()->traceableMethodsCanBeInlined()))
       return false;
 
-   static bool disableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") != NULL;
+   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
    // I am not sure if having the same type between C/S and B/Z matters here.. ie. if the type is being used as the only distinguishing factor
    switch (callNode->getSymbol()->castToResolvedMethodSymbol()->getRecognizedMethod())
       {
@@ -2070,7 +2070,7 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-         if (disableCASIntrinsic || !(comp()->target().cpu.isPower() || comp()->target().cpu.isX86()))
+         if (disableCAEIntrinsic || !(comp()->target().cpu.isPower() || comp()->target().cpu.isX86()))
             {
             break;
             }

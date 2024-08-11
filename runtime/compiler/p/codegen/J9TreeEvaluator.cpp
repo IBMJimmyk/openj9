@@ -8108,9 +8108,9 @@ static TR::Register *genCAS(TR::Node *node, TR::CodeGenerator *cg, TR::Register 
 
    generateTrg1MemInstruction(cg, reservedLoadOpCode, node, resultReg, TR::MemoryReference::createWithIndexReg(cg, objReg, offsetReg, dataSize));
    if (oldValueInReg)
-      generateTrg1Src2Instruction(cg, compareOpCode, node, cndReg, resultReg, oldVReg); //TODO: Test this carefully
+      generateTrg1Src2Instruction(cg, compareOpCode, node, cndReg, resultReg, oldVReg);
    else
-      generateTrg1Src1ImmInstruction(cg, compareImmOpCode, node, cndReg, resultReg, oldValue); //TODO: Test this carefully
+      generateTrg1Src1ImmInstruction(cg, compareImmOpCode, node, cndReg, resultReg, oldValue);
 
    if (!isExchange)
       {
@@ -8211,7 +8211,6 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
    startLabel = generateLabelSymbol(cg);
    doneLabel = generateLabelSymbol(cg);
 
-   //TODO: update this case
    bool casWithoutSync = false;
    TR_OpaqueMethodBlock *caller = node->getOwningMethod();
    if (caller)
@@ -12211,7 +12210,6 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
             }
          break;
 
-      //TODO: combine cases and just select for type and exchange
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
          // As above, we only want to inline the JNI methods, so add an explicit test for isNative()
          if (!methodSymbol->isNative())
@@ -12219,8 +12217,8 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
 
         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
-            if (!enableCASIntrinsic)
+            static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+            if (disableCAEIntrinsic)
                {
                break;
                }
@@ -12236,8 +12234,8 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
 
         if (comp->target().is64Bit() && (node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
-            if (!enableCASIntrinsic)
+            static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+            if (disableCAEIntrinsic)
                {
                break;
                }
@@ -12259,8 +12257,8 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
 
          if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            static bool enableCASIntrinsic = feGetEnv("TR_DisableCASIntrinsic") == NULL;
-            if (!enableCASIntrinsic)
+            static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+            if (disableCAEIntrinsic)
                {
                break;
                }
