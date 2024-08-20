@@ -5836,17 +5836,6 @@ TR_J9MethodBase::isUnsafePut(TR::RecognizedMethod rm)
    {
    switch (rm)
       {
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-         if (!(TR::comp()->target().cpu.isPower() || TR::comp()->target().cpu.isX86()))
-            {
-            break;
-            }
-      case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
-      case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
-      case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
       case TR::sun_misc_Unsafe_getAndAddInt:
       case TR::sun_misc_Unsafe_getAndAddLong:
       case TR::sun_misc_Unsafe_getAndSetInt:

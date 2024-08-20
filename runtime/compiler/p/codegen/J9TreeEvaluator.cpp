@@ -8149,7 +8149,7 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
    TR::RegisterDependencyConditions *conditions;
    TR::LabelSymbol *startLabel, *doneLabel;
    int64_t offsetValue, oldValue;
-   bool oldValueInReg = true, freeOffsetReg = false;
+   bool oldValueInReg, freeOffsetReg;
    TR_J9VMBase *fej9 = (TR_J9VMBase *) (cg->fe());
 
    firstChild = node->getFirstChild();
@@ -8171,6 +8171,7 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
    else
       {
       offsetReg = cg->evaluate(offsetNode);
+      freeOffsetReg = false;
 
       /* Assume that the offset is positive and not pathologically large (i.e., > 2^31). */
       if (comp->target().is32Bit())
@@ -8183,17 +8184,9 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
          {
          case 4:
             oldValue = oldVNode->getInt();
-            if (oldValue >= LOWER_IMMED && oldValue <= UPPER_IMMED)
-               {
-               oldValueInReg = false;
-               }
             break;
          case 8:
             oldValue = oldVNode->getLongInt();
-            if (oldValue >= LOWER_IMMED && oldValue <= UPPER_IMMED)
-               {
-               oldValueInReg = false;
-               }
             break;
          default:
             TR_ASSERT_FATAL_WITH_NODE(node, false, "Unknown dataSize: %d\n", dataSize);
@@ -8201,8 +8194,13 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
          }
       }
 
-   if (oldValueInReg)
+   if (oldValue >= LOWER_IMMED && oldValue <= UPPER_IMMED)
       {
+      oldValueInReg = false;
+      }
+   else
+      {
+      oldValueInReg = true;
       oldVReg = cg->evaluate(oldVNode);
       }
 
@@ -8279,7 +8277,7 @@ static TR::Register *VMinlineCompareAndSetOrExchangeReference(TR::Node *node, TR
    TR::RegisterDependencyConditions *conditions;
    TR::LabelSymbol *doneLabel, *storeLabel, *wrtBarEndLabel;
    intptr_t offsetValue;
-   bool freeOffsetReg = false;
+   bool freeOffsetReg;
    bool needDup = false;
 
    auto gcMode = TR::Compiler->om.writeBarrierType();
@@ -8306,6 +8304,9 @@ static TR::Register *VMinlineCompareAndSetOrExchangeReference(TR::Node *node, TR
    else
       {
       offsetReg = cg->evaluate(offsetNode);
+      freeOffsetReg = false;
+
+      /* Assume that the offset is positive and not pathologically large (i.e., > 2^31). */
       if (comp->target().is32Bit())
          offsetReg = offsetReg->getLowOrder();
       }
@@ -11976,6 +11977,7 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       }
    else if (methodSymbol)
       {
+      static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
       switch (methodSymbol->getRecognizedMethod())
          {
       case TR::java_util_concurrent_ConcurrentLinkedQueue_tmOffer:
@@ -12211,13 +12213,8 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
          break;
 
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
-         // As above, we only want to inline the JNI methods, so add an explicit test for isNative()
-         if (!methodSymbol->isNative())
-            break;
-
         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
             if (disableCAEIntrinsic)
                {
                break;
@@ -12228,13 +12225,8 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
          break;
 
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
-         // As above, we only want to inline the JNI methods, so add an explicit test for isNative()
-         if (!methodSymbol->isNative())
-            break;
-
         if (comp->target().is64Bit() && (node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
             if (disableCAEIntrinsic)
                {
                break;
@@ -12242,21 +12234,20 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
             resultReg = VMinlineCompareAndSetOrExchange(node, cg, 8, true);
             return true;
             }
-         else if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
-            {
-            return false;
-            }
          break;
 
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-         // As above, we only want to inline the JNI methods, so add an explicit test for isNative()
+         /*
+          * Starting from Java 12, compareAndExchangeObject was changed from a native call to a
+          * Java wrapper calling compareAndExchangeReference.
+          * We only want to inline the JNI native method, so add an explicit test for isNative().
+          */
          if (!methodSymbol->isNative())
             break;
-
+         /* If native, fall through. */
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
             if (disableCAEIntrinsic)
                {
                break;

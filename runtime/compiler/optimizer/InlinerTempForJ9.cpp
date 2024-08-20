@@ -403,17 +403,30 @@ TR_J9InlinerPolicy::alwaysWorthInlining(TR_ResolvedMethod * calleeMethod, TR::No
       case TR::java_nio_ByteOrder_nativeOrder:
          return true;
 
-      // In Java9 the following enum values match both sun.misc.Unsafe and
-      // jdk.internal.misc.Unsafe The sun.misc.Unsafe methods are simple
-      // wrappers to call jdk.internal impls, and we want to inline them. Since
-      // the same code can run with Java8 classes where sun.misc.Unsafe has the
-      // JNI impl, we need to differentiate by testing with isNative(). If it is
-      // native, then we don't need to inline it as it will be handled
-      // elsewhere.
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
-      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
+         if (!(comp()->target().cpu.isPower() || comp()->target().cpu.isX86()))
+            {
+            break;
+            }
+         return true;
+
+      /* In Java9 the compareAndSwap[Int|Long|Object] and copyMemory enums match
+       * both sun.misc.Unsafe and jdk.internal.misc.Unsafe. The sun.misc.Unsafe
+       * methods are simple wrappers to call jdk.internal impls, and we want to
+       * inline them. Since the same code can run with Java8 classes where
+       * sun.misc.Unsafe has the JNI impl, we need to differentiate by testing
+       * with isNative(). If it is native, then we don't need to inline it as it
+       * will be handled elsewhere.
+       *
+       * Starting from Java12, compareAndExchangeObject was changed from being a
+       * native to being a simple wrapper to call compareAndExchangeReference.
+       * The enum matches both cases and we only want to force inlining on the
+       * non-native case. If the native case reaches here, it means it already
+       * failed the isInlineableJNI check and should not be force inlined.
+       */
+      case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
          if (!(comp()->target().cpu.isPower() || comp()->target().cpu.isX86()))
             {
             break;
