@@ -9723,7 +9723,6 @@ inlineCompareAndSwapNative(
       if (comp->target().is32Bit())
          offsetReg = offsetReg->getLowOrder();
       }
-   cg->decReferenceCount(offsetChild);
 
    TR::MemoryReference *mr;
 
@@ -9768,7 +9767,6 @@ inlineCompareAndSwapNative(
    TR::Register *oldValueRegister = (size == 8) ?
                                       cg->longClobberEvaluate(oldValueChild) : cg->intClobberEvaluate(oldValueChild);
    bool killOldValueRegister = (oldValueChild->getReferenceCount() > 1) ? true : false;
-   cg->decReferenceCount(oldValueChild);
 
    TR::RegisterDependencyConditions  *deps;
    TR_X86ScratchRegisterManager *scratchRegisterManagerForRealTime = NULL;
@@ -9897,8 +9895,17 @@ inlineCompareAndSwapNative(
 
    node->setRegister(resultReg);
 
-   cg->decReferenceCount(newValueChild);
    cg->decReferenceCount(objectChild);
+   if (offsetReg)
+      {
+      cg->decReferenceCount(offsetChild);
+      }
+   else
+      {
+      cg->recursivelyDecReferenceCount(offsetChild);
+      }
+   cg->decReferenceCount(oldValueChild);
+   cg->decReferenceCount(newValueChild);
    if (bumpedRefCount)
       cg->decReferenceCount(translatedNode);
 
