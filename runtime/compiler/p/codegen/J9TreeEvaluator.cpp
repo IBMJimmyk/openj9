@@ -12085,8 +12085,6 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
         // In Java9 this can be either the jdk.internal JNI method or the sun.misc Java wrapper.
         // In Java8 it will be sun.misc which will contain the JNI directly.
         // We only want to inline the JNI methods, so add an explicit test for isNative().
-        if (!methodSymbol->isNative())
-           break;
 
         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
@@ -12099,8 +12097,6 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
          if (comp->getOption(TR_TraceCG))
             traceMsg(comp, "In evaluator for compareAndSwapLong. node = %p node->isSafeForCGToFastPathUnsafeCall = %p\n", node, node->isSafeForCGToFastPathUnsafeCall());
          // As above, we only want to inline the JNI methods, so add an explicit test for isNative()
-         if (!methodSymbol->isNative())
-            break;
 
          if (comp->target().is64Bit() && (node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
@@ -12116,8 +12112,6 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
 
       case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
          // As above, we only want to inline the JNI methods, so add an explicit test for isNative()
-         if (!methodSymbol->isNative())
-            break;
 
          if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {

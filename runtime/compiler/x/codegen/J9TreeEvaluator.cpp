@@ -9702,11 +9702,6 @@ inlineCompareAndSwapNative(
    // not be converting to assembly), the new jdk.internal JNI methods or the
    // Java8 sun.misc JNI methods (both of which we will convert). We can
    // differentiate between these cases by testing with isNative() on the method.
-   {
-      TR::MethodSymbol *methodSymbol = node->getSymbol()->getMethodSymbol();
-      if (methodSymbol && !methodSymbol->isNative())
-         return false;
-   }
 
    cg->recursivelyDecReferenceCount(firstChild);
 
