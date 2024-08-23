@@ -8149,7 +8149,7 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
    TR::RegisterDependencyConditions *conditions;
    TR::LabelSymbol *startLabel, *doneLabel;
    int64_t offsetValue, oldValue;
-   bool oldValueInReg, freeOffsetReg;
+   bool oldValueInReg = true, freeOffsetReg = false;
    TR_J9VMBase *fej9 = (TR_J9VMBase *) (cg->fe());
 
    firstChild = node->getFirstChild();
@@ -8192,15 +8192,15 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
             TR_ASSERT_FATAL_WITH_NODE(node, false, "Unknown dataSize: %d\n", dataSize);
             break;
          }
+
+      if (oldValue >= LOWER_IMMED && oldValue <= UPPER_IMMED)
+         {
+         oldValueInReg = false;
+         }
       }
 
-   if (oldValue >= LOWER_IMMED && oldValue <= UPPER_IMMED)
+   if (oldValueInReg)
       {
-      oldValueInReg = false;
-      }
-   else
-      {
-      oldValueInReg = true;
       oldVReg = cg->evaluate(oldVNode);
       }
 
