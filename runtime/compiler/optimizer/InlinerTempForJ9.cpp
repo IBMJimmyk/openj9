@@ -410,7 +410,7 @@ TR_J9InlinerPolicy::alwaysWorthInlining(TR_ResolvedMethod * calleeMethod, TR::No
             {
             break;
             }
-         return true;
+         return false;
 
       /* In Java9 the compareAndSwap[Int|Long|Object] and copyMemory enums match
        * both sun.misc.Unsafe and jdk.internal.misc.Unsafe. The sun.misc.Unsafe
