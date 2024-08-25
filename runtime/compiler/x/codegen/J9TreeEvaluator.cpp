@@ -9910,6 +9910,10 @@ inlineCompareAndSwapNative(
       if (isObject)
          {
          resultReg->setContainsCollectedReference();
+         if (TR::Compiler->om.compressedReferenceShiftOffset() != 0)
+            {
+            generateRegImmInstruction(TR::InstOpCode::SHLRegImm1(), node, resultReg, TR::Compiler->om.compressedReferenceShiftOffset(), cg);
+            }
          }
       }
 
@@ -10107,6 +10111,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
                return inlineCompareAndSwapNative(node, 8, false, true, cg);
             }
             break;
+         case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
             {
             static bool UseOldCompareAndSwapObject = (bool)feGetEnv("TR_UseOldCompareAndSwapObject");
