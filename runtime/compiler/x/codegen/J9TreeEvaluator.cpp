@@ -10617,11 +10617,17 @@ void J9::X86::TreeEvaluator::VMwrtbarWithoutStoreEvaluator(
        (gcMode == gc_modron_wrtbar_cardmark
        || gcMode == gc_modron_wrtbar_cardmark_and_oldcheck
        || gcMode == gc_modron_wrtbar_cardmark_incremental) &&
-       (node->getOpCodeValue()==TR::icall)) {
-       TR::MethodSymbol *symbol = node->getSymbol()->castToMethodSymbol();
-       if (symbol != NULL && symbol->getRecognizedMethod())
-          unsafeCallBarrier = true;
-   }
+       node->getOpCode().isCall())
+      {
+      TR::MethodSymbol *symbol = node->getSymbol()->castToMethodSymbol();
+      if (symbol &&
+          (symbol->getRecognizedMethod() == TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z ||
+           symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_compareAndExchangeObject ||
+           symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_compareAndExchangeReference))
+         {
+         unsafeCallBarrier = true;
+         }
+      }
 
    bool doCheckConcurrentMarkActive =
          (gcMode == gc_modron_wrtbar_cardmark
