@@ -11945,11 +11945,11 @@ void J9::Z::TreeEvaluator::genWrtbarForArrayCopy(TR::Node *node, TR::Register *s
    }
 
 TR::Register*
-J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *cg, TR::InstOpCode::Mnemonic casOp, bool isObj)
+J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *cg, TR::InstOpCode::Mnemonic casOp, bool isObj, bool isExchange)
    {
    TR::Register *scratchReg = NULL;
    TR::Register *objReg, *oldVReg, *newVReg;
-   TR::Register *resultReg = cg->allocateRegister();
+   TR::Register *resultReg = isExchange ? nullptr : cg->allocateRegister();
    TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
    TR::MemoryReference* casMemRef = NULL;
 
@@ -12037,10 +12037,13 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
       needsDup = true;
       }
 
-   generateRIInstruction(cg, TR::InstOpCode::getLoadHalfWordImmOpCode(), node, resultReg, 0x0);
+   if (!isExchange)
+      {
+      generateRIInstruction(cg, TR::InstOpCode::getLoadHalfWordImmOpCode(), node, resultReg, 0x0);
+      }
 
    //  We can run into trouble when the offset value gets too big, or it may
-   //  simply not nbe known at compile time.
+   //  simply not be known at compile time.
    //
    if (offsetNode->getOpCode().isLoadConst() && offsetNode->getRegister()==NULL)
       {
@@ -12090,14 +12093,25 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
 
    //  Setup return
    //
-   generateS390BranchInstruction(cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BNE, node, doneLabel);
+   if (isExchange)
+      {
+      resultReg = oldVReg;
+      resultReg->setContainsCollectedReference();
+      if (TR::Compiler->om.compressedReferenceShiftOffset() != 0)
+         {
+         generateRSInstruction(cg, TR::InstOpCode::SRL, node, resultReg, TR::Compiler->om.compressedReferenceShiftOffset());
+         }
+      }
+   else
+      {
+      generateS390BranchInstruction(cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BNE, node, doneLabel);
 
-   generateRIInstruction(cg, TR::InstOpCode::getLoadHalfWordImmOpCode(), node, resultReg, 0x1);
+      generateRIInstruction(cg, TR::InstOpCode::getLoadHalfWordImmOpCode(), node, resultReg, 0x1);
+      TR::RegisterDependencyConditions* cond = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(0, 1, cg);
+      cond->addPostCondition(resultReg, TR::RealRegister::AssignAny);
 
-   TR::RegisterDependencyConditions* cond = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(0, 1, cg);
-   cond->addPostCondition(resultReg, TR::RealRegister::AssignAny);
-
-   generateS390LabelInstruction(cg, TR::InstOpCode::label, node, doneLabel, cond);
+      generateS390LabelInstruction(cg, TR::InstOpCode::label, node, doneLabel, cond);
+      }
 
    // Do wrtbar for Objects
    //
@@ -12132,7 +12146,6 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
             wbRef = comp->getSymRefTab()->findOrCreateWriteBarrierStoreSymbolRef(comp->getMethodSymbol());
          VMnonNullSrcWrtBarCardCheckEvaluator(node, objReg, compressedValueRegister, epReg, raReg, doneLabelWrtBar, wbRef, condWrtBar, cg, false);
          }
-
       else if (doCrdMrk)
          {
          VMCardCheckEvaluator(node, objReg, epReg, condWrtBar, cg, false, doneLabelWrtBar, false);
@@ -12146,6 +12159,8 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
       cg->stopUsingRegister(raReg);
       }
 
+   node->setRegister(resultReg);
+
    // Value is not used, and not eval'd to avoid the extra reg
    //  So recursively decrement to compensate
    //
@@ -12156,7 +12171,10 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
    cg->decReferenceCount(oldVNode);
    cg->decReferenceCount(newVNode);
 
-   cg->stopUsingRegister(oldVReg);
+   if (!isExchange)
+      {
+      cg->stopUsingRegister(oldVReg);
+      }
 
    if (needsDup)
       {
@@ -12170,7 +12188,6 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
    if (isValueCompressedReference)
       cg->decReferenceCount(decompressedValueNode);
 
-   node->setRegister(resultReg);
    return resultReg;
    }
 
