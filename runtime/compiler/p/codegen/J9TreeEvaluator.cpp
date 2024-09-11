@@ -8173,7 +8173,7 @@ static TR::Register *VMinlineCompareAndSetOrExchange(TR::Node *node, TR::CodeGen
       offsetReg = cg->evaluate(offsetNode);
       freeOffsetReg = false;
 
-      /* Assume that the offset is positive and not pathologically large (i.e., > 2^31). */
+      // Assume that the offset is positive and not pathologically large (i.e., > 2^31).
       if (comp->target().is32Bit())
          offsetReg = offsetReg->getLowOrder();
       }
@@ -8431,7 +8431,7 @@ static TR::Register *VMinlineCompareAndSetOrExchangeReference(TR::Node *node, TR
 #endif //OMR_GC_CONCURRENT_SCAVENGER
 
    if (!comp->getOptions()->realTimeGC())
-      resultReg = genCAS(node, cg, objReg, offsetReg, oldVReg, newVReg, cndReg, doneLabel, objNode, 0, true, (comp->target().is64Bit() && !comp->useCompressedPointers()) ? 8 : 4, true, isExchange, false);
+      resultReg = genCAS(node, cg, objReg, offsetReg, oldVReg, newVReg, cndReg, doneLabel, objNode, 0, true, TR::Compiler->om.sizeofReferenceField(), true, isExchange, false);
 
    uint32_t numDeps = (doWrtBar || doCrdMrk) ? 13 : 11;
 
@@ -8591,7 +8591,7 @@ static TR::Register *VMinlineCompareAndSetOrExchangeReference(TR::Node *node, TR
    generateLabelInstruction(cg, TR::InstOpCode::label, node, storeLabel);
 
    if (comp->getOptions()->realTimeGC())
-      resultReg = genCAS(node, cg, objReg, offsetReg, oldVReg, newVReg, cndReg, doneLabel, objNode, 0, true, (comp->target().is64Bit() && !comp->useCompressedPointers()) ? 8 : 4, true, isExchange, false);
+      resultReg = genCAS(node, cg, objReg, offsetReg, oldVReg, newVReg, cndReg, doneLabel, objNode, 0, true, TR::Compiler->om.sizeofReferenceField(), true, isExchange, false);
 
    TR::addDependency(conditions, resultReg, TR::RealRegister::NoReg, TR_GPR, cg);
    if (oldVReg != newVReg && oldVReg != objReg)
@@ -12215,24 +12215,22 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (disableCAEIntrinsic)
+            if (!disableCAEIntrinsic)
                {
-               break;
+               resultReg = VMinlineCompareAndSetOrExchange(node, cg, 4, true);
+               return true;
                }
-            resultReg = VMinlineCompareAndSetOrExchange(node, cg, 4, true);
-            return true;
             }
          break;
 
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
         if (comp->target().is64Bit() && (node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (disableCAEIntrinsic)
+            if (!disableCAEIntrinsic)
                {
-               break;
+               resultReg = VMinlineCompareAndSetOrExchange(node, cg, 8, true);
+               return true;
                }
-            resultReg = VMinlineCompareAndSetOrExchange(node, cg, 8, true);
-            return true;
             }
          break;
 
@@ -12248,12 +12246,11 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (disableCAEIntrinsic)
+            if (!disableCAEIntrinsic)
                {
-               break;
+               resultReg = VMinlineCompareAndSetOrExchangeReference(node, cg, true);
+               return true;
                }
-            resultReg = VMinlineCompareAndSetOrExchangeReference(node, cg, true);
-            return true;
             }
          break;
 

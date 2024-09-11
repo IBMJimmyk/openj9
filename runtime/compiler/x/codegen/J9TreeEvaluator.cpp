@@ -10090,7 +10090,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
             if (node->isSafeForCGToFastPathUnsafeCall())
                {
                if (UseOldCompareAndSwapObject)
-                  return inlineCompareAndSwapNative(node, (comp->target().is64Bit() && !comp->useCompressedPointers()) ? 8 : 4, true, false, cg);
+                  return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, false, cg);
                else
                   {
                   inlineCompareAndSwapObjectNative(node, cg, false);
@@ -10118,7 +10118,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
             if (!disableCAEIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
                {
                if (UseOldCompareAndSwapObject)
-                  return inlineCompareAndSwapNative(node, (comp->target().is64Bit() && !comp->useCompressedPointers()) ? 8 : 4, true, true, cg);
+                  return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, true, cg);
                else
                   {
                   inlineCompareAndSwapObjectNative(node, cg, true);
