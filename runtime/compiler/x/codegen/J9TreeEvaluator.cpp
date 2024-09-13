@@ -9991,7 +9991,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
    bool callWasInlined = false;
    TR::Compilation *comp = cg->comp();
 
-   static bool disableCAEIntrinsic = true; //feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
 
    if (methodSymbol)
       {
