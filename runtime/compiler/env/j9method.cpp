@@ -5528,6 +5528,7 @@ TR_J9MethodBase::isUnsafeCAS(TR::Compilation * c)
    {
    TR::Compilation *comp = TR::comp();
    TR_ASSERT_FATAL(comp, "comp shouldn't be NULL");
+   TR_ASSERT_FATAL((nullptr == c) || (comp == c), "comp shouldn't be NULL");
 
    TR::RecognizedMethod rm = getRecognizedMethod();
    switch (rm)
