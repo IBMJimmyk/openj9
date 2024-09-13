@@ -5526,6 +5526,9 @@ TR_ResolvedJ9Method::isJITInternalNative()
 bool
 TR_J9MethodBase::isUnsafeCAS(TR::Compilation * c)
    {
+   TR::Compilation *comp = TR::comp();
+   TR_ASSERT_FATAL(comp, "comp shouldn't be NULL");
+
    TR::RecognizedMethod rm = getRecognizedMethod();
    switch (rm)
       {
@@ -5533,7 +5536,7 @@ TR_J9MethodBase::isUnsafeCAS(TR::Compilation * c)
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-         return (c->target().cpu.isPower() || c->target().cpu.isX86());
+         return (comp && (comp->target().cpu.isPower() || comp->target().cpu.isX86()));
       case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
       case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
       case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
