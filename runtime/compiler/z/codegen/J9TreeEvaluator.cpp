@@ -11954,7 +11954,6 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
    TR::Register *scratchReg = NULL;
    TR::Register *objReg, *oldVReg, *newVReg;
    TR::Register *resultReg = isExchange ? NULL : cg->allocateRegister();
-   TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
    TR::MemoryReference* casMemRef = NULL;
 
    TR::Compilation * comp = cg->comp();
@@ -11970,9 +11969,9 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
    // compression sequence.
    bool isValueCompressedReference = false;
 
-   TR::Node* compressedValueNode = newVNode;
+   TR::Node* decompressedValueNode = newVNode;
 
-   if (isObj && comp->useCompressedPointers() && compressedValueNode->getOpCodeValue() == TR::l2i)
+   if (isObj && comp->useCompressedPointers() && decompressedValueNode->getOpCodeValue() == TR::l2i)
       {
       // Pattern match the sequence:
       //
@@ -11984,35 +11983,35 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
       //    l2i
       //      lushr
       //        a2l
-      //          <compressedValueNode>
+      //          <decompressedValueNode>
       //        iconst
 
-      if (compressedValueNode->getOpCode().isConversion())
+      if (decompressedValueNode->getOpCode().isConversion())
          {
-         compressedValueNode = compressedValueNode->getFirstChild();
+         decompressedValueNode = decompressedValueNode->getFirstChild();
          }
 
-      if (compressedValueNode->getOpCode().isRightShift())
+      if (decompressedValueNode->getOpCode().isRightShift())
          {
-         compressedValueNode = compressedValueNode->getFirstChild();
+         decompressedValueNode = decompressedValueNode->getFirstChild();
          }
 
       isValueCompressedReference = true;
 
-      while ((compressedValueNode->getNumChildren() > 0) && (compressedValueNode->getOpCodeValue() != TR::a2l))
+      while ((decompressedValueNode->getNumChildren() > 0) && (decompressedValueNode->getOpCodeValue() != TR::a2l))
          {
-         compressedValueNode = compressedValueNode->getFirstChild();
+         decompressedValueNode = decompressedValueNode->getFirstChild();
          }
 
-      if (compressedValueNode->getOpCodeValue() == TR::a2l)
+      if (decompressedValueNode->getOpCodeValue() == TR::a2l)
          {
-         compressedValueNode = compressedValueNode->getFirstChild();
+         decompressedValueNode = decompressedValueNode->getFirstChild();
          }
 
       // Artificially bump the reference count on the value so that different registers are allocated for the
       // compressed and decompressed values. This is done so that the card mark write barrier helper uses the
       // decompressed value.
-      compressedValueNode->incReferenceCount();
+      decompressedValueNode->incReferenceCount();
       }
 
    // Eval old and new vals
@@ -12021,11 +12020,11 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
    oldVReg = cg->gprClobberEvaluate(oldVNode);  //  CS oldReg, newReg, OFF(objReg)
    newVReg = cg->evaluate(newVNode);                    //    oldReg is clobbered
 
-   TR::Register* compressedValueRegister = newVReg;
+   TR::Register* decompressedValueRegister = newVReg;
 
    if (isValueCompressedReference)
       {
-      compressedValueRegister = cg->evaluate(compressedValueNode);
+      decompressedValueRegister = cg->evaluate(decompressedValueNode);
       }
 
    bool needsDup = false;
@@ -12036,7 +12035,7 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
       newVReg = cg->allocateCollectedReferenceRegister();
       generateRRInstruction(cg, TR::InstOpCode::getLoadRegOpCode(), node, newVReg, objReg);
       if (!isValueCompressedReference)
-         compressedValueRegister = newVReg;
+         decompressedValueRegister = newVReg;
 
       needsDup = true;
       }
@@ -12111,6 +12110,7 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
       }
    else
       {
+      TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
       generateS390BranchInstruction(cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BNE, node, doneLabel);
 
       generateRIInstruction(cg, TR::InstOpCode::getLoadHalfWordImmOpCode(), node, resultReg, 0x1);
@@ -12135,10 +12135,10 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
       TR::Register *raReg = cg->allocateRegister();
       TR::RegisterDependencyConditions* condWrtBar = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(0, 5, cg);
       condWrtBar->addPostCondition(objReg, TR::RealRegister::GPR1);
-      if (compressedValueRegister != newVReg)
+      if (decompressedValueRegister != newVReg)
          condWrtBar->addPostCondition(newVReg, TR::RealRegister::AssignAny); //defect 92001
-      if (compressedValueRegister != objReg)  // add this because I got conflicting dependencies on GPR1 and GPR2!
-         condWrtBar->addPostCondition(compressedValueRegister, TR::RealRegister::GPR2); //defect 92001
+      if (decompressedValueRegister != objReg)  // add this because I got conflicting dependencies on GPR1 and GPR2!
+         condWrtBar->addPostCondition(decompressedValueRegister, TR::RealRegister::GPR2); //defect 92001
       condWrtBar->addPostCondition(epReg, cg->getEntryPointRegister());
       condWrtBar->addPostCondition(raReg, cg->getReturnAddressRegister());
       // Cardmarking is not inlined for gencon. Consider doing so when perf issue arises.
@@ -12151,7 +12151,7 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
             wbRef = comp->getSymRefTab()->findOrCreateWriteBarrierStoreGenerationalSymbolRef(comp->getMethodSymbol());
          else
             wbRef = comp->getSymRefTab()->findOrCreateWriteBarrierStoreSymbolRef(comp->getMethodSymbol());
-         VMnonNullSrcWrtBarCardCheckEvaluator(node, objReg, compressedValueRegister, epReg, raReg, doneLabelWrtBar, wbRef, condWrtBar, cg, false);
+         VMnonNullSrcWrtBarCardCheckEvaluator(node, objReg, decompressedValueRegister, epReg, raReg, doneLabelWrtBar, wbRef, condWrtBar, cg, false);
          }
       else if (doCrdMrk)
          {
@@ -12193,7 +12193,7 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
       }
 
    if (isValueCompressedReference)
-      cg->decReferenceCount(compressedValueNode);
+      cg->decReferenceCount(decompressedValueNode);
 
    return resultReg;
    }
