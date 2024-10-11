@@ -3847,11 +3847,11 @@ J9::Z::CodeGenerator::inlineDirectCall(
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
          if ((!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            /*if (!disableCAEIntrinsic)
                {
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CS, IS_NOT_OBJ, true);
                return true;
-               }
+               }*/
             }
          break;
 
