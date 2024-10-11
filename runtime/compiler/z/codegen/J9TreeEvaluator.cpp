@@ -12099,6 +12099,20 @@ J9::Z::TreeEvaluator::VMinlineCompareAndSwap(TR::Node *node, TR::CodeGenerator *
    if (isExchange)
       {
       resultReg = oldVReg;
+      if (comp->target().is64Bit() && (TR::InstOpCode::CS == casOp))
+         {
+         if (isObj)
+            {
+            generateRSInstruction(cg, TR::InstOpCode::SLLG, node, resultReg, resultReg, 16);
+            generateRSInstruction(cg, TR::InstOpCode::SLLG, node, resultReg, resultReg, 16);
+            generateRSInstruction(cg, TR::InstOpCode::SRLG, node, resultReg, resultReg, 16);
+            generateRSInstruction(cg, TR::InstOpCode::SRLG, node, resultReg, resultReg, 16);
+            }
+         else
+            {
+            generateRRInstruction(cg, TR::InstOpCode::LGFR, node, resultReg, resultReg);
+            }
+         }
       if (isObj)
          {
          resultReg->setContainsCollectedReference();
