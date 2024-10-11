@@ -3858,11 +3858,11 @@ J9::Z::CodeGenerator::inlineDirectCall(
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
          if (comp->target().is64Bit() && (!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            /*if (!disableCAEIntrinsic)
                {
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CSG, IS_NOT_OBJ, true);
                return true;
-               }
+               }*/
             }
          // Too risky to do Long-31bit version now.
          break;
