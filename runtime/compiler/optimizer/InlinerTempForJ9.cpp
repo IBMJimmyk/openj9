@@ -1954,6 +1954,8 @@ TR_J9InlinerPolicy::createUnsafeCASCallDiamond(TR::TreeTop *callNodeTreeTop, TR:
          }
       }
 
+   TR::DebugCounter::prependDebugCounter(comp(), TR::DebugCounter::debugCounterName(comp(), "zzzFastPathUnsafeCall"), defaultAccessTreeTop); //TODO: remove this
+   TR::DebugCounter::prependDebugCounter(comp(), TR::DebugCounter::debugCounterName(comp(), "yyyFastPathUnsafeCall/(%s)/%p", comp()->signature(), defaultAccessTreeTop->getNode()), defaultAccessTreeTop); //TODO: remove this
 
 
    return true;
