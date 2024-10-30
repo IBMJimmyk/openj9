@@ -145,6 +145,12 @@ J9::X86::CodeGenerator::initialize()
       cg->setSupportsInlineVectorizedMismatch();
       }
 
+   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+   if (!disableCAEIntrinsic)
+      {
+      cg->setSupportsInlineUnsafeCompareAndExchange();
+      }
+
    // Disable fast gencon barriers for AOT compiles because relocations on
    // the inlined heap addresses are not available (yet).
    //

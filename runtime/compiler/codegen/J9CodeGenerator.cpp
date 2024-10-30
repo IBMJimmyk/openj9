@@ -670,7 +670,7 @@ J9::CodeGenerator::lowerTreesPreChildrenVisit(TR::Node *parent, TR::TreeTop *tre
           self()->comp()->useCompressedPointers() && useOldCompareAndSwapObject)
          {
          TR::MethodSymbol *methodSymbol = parent->getSymbol()->castToMethodSymbol();
-         static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+         bool disableCAEIntrinsic = !self()->getSupportsInlineUnsafeCompareAndExchange();
          // In Java9 Unsafe could be the jdk.internal JNI method or the sun.misc ordinary method wrapper,
          // while in Java8 it can only be the sun.misc package which will itself contain the JNI method.
          // Test for isNative to distinguish between them.

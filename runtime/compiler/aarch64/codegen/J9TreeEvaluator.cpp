@@ -6863,7 +6863,7 @@ J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
             break;
          }
 
-      static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+      bool disableCAEIntrinsic = !cg->getSupportsInlineUnsafeCompareAndExchange();
       switch (methodSymbol->getRecognizedMethod())
          {
          case TR::java_lang_Thread_onSpinWait:

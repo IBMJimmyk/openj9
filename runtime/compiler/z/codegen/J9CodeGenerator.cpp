@@ -150,6 +150,12 @@ J9::Z::CodeGenerator::initialize()
       cg->setSupportsInlineVectorizedMismatch();
       }
 
+   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+   if (!disableCAEIntrinsic)
+      {
+      cg->setSupportsInlineUnsafeCompareAndExchange();
+      }
+
    // Let's turn this on.  There is more work needed in the opt
    // to catch the case where the BNDSCHK is inserted after
    //
@@ -3822,7 +3828,7 @@ J9::Z::CodeGenerator::inlineDirectCall(
       }
 
    static const char * enableTRTRE = feGetEnv("TR_enableTRTRE");
-   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+   bool disableCAEIntrinsic = !cg->getSupportsInlineUnsafeCompareAndExchange();
    switch (methodSymbol->getRecognizedMethod())
       {
       case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:

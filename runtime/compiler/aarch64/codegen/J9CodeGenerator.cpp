@@ -101,6 +101,12 @@ J9::ARM64::CodeGenerator::initialize()
       }
    if (comp->fej9()->hasFixedFrameC_CallingConvention())
       cg->setHasFixedFrameC_CallingConvention();
+
+   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+   if (!disableCAEIntrinsic)
+      {
+      cg->setSupportsInlineUnsafeCompareAndExchange();
+      }
    }
 
 TR::Linkage *
