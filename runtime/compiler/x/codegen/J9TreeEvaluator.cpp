@@ -9994,7 +9994,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
    bool callWasInlined = false;
    TR::Compilation *comp = cg->comp();
 
-   bool disableCAEIntrinsic = !cg->getSupportsInlineUnsafeCompareAndExchange();
+   bool disableCAEInlining = !cg->getSupportsInlineUnsafeCompareAndExchange();
 
    if (methodSymbol)
       {
@@ -10104,13 +10104,13 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
             break;
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
             {
-            if (!disableCAEIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
                return inlineCompareAndSwapNative(node, 4, false, true, cg);
             }
             break;
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
             {
-            if (!disableCAEIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
                return inlineCompareAndSwapNative(node, 8, false, true, cg);
             }
             break;
@@ -10118,7 +10118,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
             {
             static bool useOldCompareAndSwapObject = (bool)feGetEnv("TR_UseOldCompareAndSwapObject");
-            if (!disableCAEIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
                {
                if (useOldCompareAndSwapObject)
                   return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, true, cg);

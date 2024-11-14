@@ -11882,7 +11882,7 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       }
    else if (methodSymbol)
       {
-      bool disableCAEIntrinsic = !cg->getSupportsInlineUnsafeCompareAndExchange();
+      bool disableCAEInlining = !cg->getSupportsInlineUnsafeCompareAndExchange();
       switch (methodSymbol->getRecognizedMethod())
          {
       case TR::java_util_concurrent_ConcurrentLinkedQueue_tmOffer:
@@ -12210,7 +12210,7 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            if (!disableCAEInlining)
                {
                resultReg = VMinlineCompareAndSetOrExchange(node, cg, 4, true);
                return true;
@@ -12221,7 +12221,7 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
         if (comp->target().is64Bit() && (node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            if (!disableCAEInlining)
                {
                resultReg = VMinlineCompareAndSetOrExchange(node, cg, 8, true);
                return true;
@@ -12241,7 +12241,7 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            if (!disableCAEInlining)
                {
                resultReg = VMinlineCompareAndSetOrExchangeReference(node, cg, true);
                return true;

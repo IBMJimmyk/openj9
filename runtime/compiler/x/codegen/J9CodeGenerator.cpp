@@ -145,8 +145,8 @@ J9::X86::CodeGenerator::initialize()
       cg->setSupportsInlineVectorizedMismatch();
       }
 
-   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
-   if (!disableCAEIntrinsic)
+   static bool disableCAEInlining = feGetEnv("TR_DisableCAEInlining") != NULL;
+   if (!disableCAEInlining)
       {
       cg->setSupportsInlineUnsafeCompareAndExchange();
       }

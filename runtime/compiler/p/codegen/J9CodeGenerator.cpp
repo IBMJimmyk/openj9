@@ -108,8 +108,8 @@ J9::Power::CodeGenerator::initialize()
       !disableStringInflateIntrinsic)
       cg->setSupportsInlineStringLatin1Inflate();
 
-   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
-   if (!disableCAEIntrinsic)
+   static bool disableCAEInlining = feGetEnv("TR_DisableCAEInlining") != NULL;
+   if (!disableCAEInlining)
       {
       cg->setSupportsInlineUnsafeCompareAndExchange();
       }
