@@ -150,6 +150,12 @@ J9::Z::CodeGenerator::initialize()
       cg->setSupportsInlineVectorizedMismatch();
       }
 
+   static bool disableCASInlining = feGetEnv("TR_DisableCASInlining") != NULL;
+   if (!disableCASInlining)
+      {
+      cg->setSupportsInlineUnsafeCompareAndSet();
+      }
+
    static bool disableCAEInlining = feGetEnv("TR_DisableCAEInlining") != NULL;
    if (!disableCAEInlining)
       {
@@ -3828,6 +3834,7 @@ J9::Z::CodeGenerator::inlineDirectCall(
       }
 
    static const char * enableTRTRE = feGetEnv("TR_enableTRTRE");
+   bool disableCASInlining = !cg->getSupportsInlineUnsafeCompareAndSet();
    bool disableCAEInlining = !cg->getSupportsInlineUnsafeCompareAndExchange();
    switch (methodSymbol->getRecognizedMethod())
       {
@@ -3840,8 +3847,11 @@ J9::Z::CodeGenerator::inlineDirectCall(
 
          if ((!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CS, IS_NOT_OBJ);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CS, IS_NOT_OBJ);
+               return true;
+               }
             }
          break;
 
@@ -3853,8 +3863,11 @@ J9::Z::CodeGenerator::inlineDirectCall(
          // Too risky to do Long-31bit version now.
          if (comp->target().is64Bit() && (!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CSG, IS_NOT_OBJ);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CSG, IS_NOT_OBJ);
+               return true;
+               }
             }
          break;
 
@@ -3865,8 +3878,11 @@ J9::Z::CodeGenerator::inlineDirectCall(
 
          if ((!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, (comp->useCompressedPointers() ? TR::InstOpCode::CS : TR::InstOpCode::getCmpAndSwapOpCode()), IS_OBJ);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, (comp->useCompressedPointers() ? TR::InstOpCode::CS : TR::InstOpCode::getCmpAndSwapOpCode()), IS_OBJ);
+               return true;
+               }
             }
          break;
 

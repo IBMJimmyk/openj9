@@ -11882,6 +11882,7 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       }
    else if (methodSymbol)
       {
+      bool disableCASInlining = !cg->getSupportsInlineUnsafeCompareAndSet();
       bool disableCAEInlining = !cg->getSupportsInlineUnsafeCompareAndExchange();
       switch (methodSymbol->getRecognizedMethod())
          {
@@ -12171,8 +12172,11 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
 
         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = VMinlineCompareAndSetOrExchange(node, cg, 4, false);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = VMinlineCompareAndSetOrExchange(node, cg, 4, false);
+               return true;
+               }
             }
          break;
 
@@ -12185,13 +12189,19 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
 
          if (comp->target().is64Bit() && (node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = VMinlineCompareAndSetOrExchange(node, cg, 8, false);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = VMinlineCompareAndSetOrExchange(node, cg, 8, false);
+               return true;
+               }
             }
          else if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = inlineAtomicOperation(node, cg, methodSymbol);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = inlineAtomicOperation(node, cg, methodSymbol);
+               return true;
+               }
             }
          break;
 
@@ -12202,8 +12212,11 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
 
          if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = VMinlineCompareAndSetOrExchangeReference(node, cg, false);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = VMinlineCompareAndSetOrExchangeReference(node, cg, false);
+               return true;
+               }
             }
          break;
 

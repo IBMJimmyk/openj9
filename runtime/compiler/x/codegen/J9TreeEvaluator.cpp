@@ -9688,11 +9688,6 @@ inlineCompareAndSwapNative(
    if (TR::Compiler->om.canGenerateArraylets() && !node->isUnsafeGetPutCASCallOnNonArray())
       return false;
 
-   static char *disableCASInlining = feGetEnv("TR_DisableCASInlining");
-
-   if (disableCASInlining /* || comp->useCompressedPointers() */)
-      return false;
-
    // size = 4 --> CMPXCHG4
    // size = 8 --> if 64-bit -> CMPXCHG8
    //              else if proc supports CMPXCHG8B -> CMPXCHG8B
@@ -9994,6 +9989,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
    bool callWasInlined = false;
    TR::Compilation *comp = cg->comp();
 
+   bool disableCASInlining = !cg->getSupportsInlineUnsafeCompareAndSet();
    bool disableCAEInlining = !cg->getSupportsInlineUnsafeCompareAndExchange();
 
    if (methodSymbol)
@@ -10077,20 +10073,20 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
             return false; // Call the native version of NativeThread.current()
          case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
             {
-            if (node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
                return inlineCompareAndSwapNative(node, 4, false, false, cg);
             }
             break;
          case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
             {
-            if (node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
                return inlineCompareAndSwapNative(node, 8, false, false, cg);
             }
             break;
          case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
             {
             static bool useOldCompareAndSwapObject = (bool)feGetEnv("TR_UseOldCompareAndSwapObject");
-            if (node->isSafeForCGToFastPathUnsafeCall())
+            if (disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
                {
                if (useOldCompareAndSwapObject)
                   return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, false, cg);
