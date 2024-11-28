@@ -10086,7 +10086,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
          case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
             {
             static bool useOldCompareAndSwapObject = (bool)feGetEnv("TR_UseOldCompareAndSwapObject");
-            if (disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
                {
                if (useOldCompareAndSwapObject)
                   return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, false, cg);
