@@ -3864,6 +3864,7 @@ J9::Z::CodeGenerator::inlineDirectCall(
             {
             if (!disableCASInlining)
                {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CS, IS_NOT_OBJ);
                return true;
                }
@@ -3880,6 +3881,7 @@ J9::Z::CodeGenerator::inlineDirectCall(
             {
             if (!disableCASInlining)
                {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CSG, IS_NOT_OBJ);
                return true;
                }
@@ -3895,6 +3897,7 @@ J9::Z::CodeGenerator::inlineDirectCall(
             {
             if (!disableCASInlining)
                {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, (comp->useCompressedPointers() ? TR::InstOpCode::CS : TR::InstOpCode::getCmpAndSwapOpCode()), IS_OBJ);
                return true;
                }
@@ -3906,6 +3909,7 @@ J9::Z::CodeGenerator::inlineDirectCall(
             {
             if (!disableCAEInlining)
                {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CS, IS_NOT_OBJ, true);
                return true;
                }
@@ -3918,6 +3922,7 @@ J9::Z::CodeGenerator::inlineDirectCall(
             {
             if (!disableCAEInlining)
                {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CSG, IS_NOT_OBJ, true);
                return true;
                }
@@ -3938,6 +3943,7 @@ J9::Z::CodeGenerator::inlineDirectCall(
             {
             if (!disableCAEInlining)
                {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, (comp->useCompressedPointers() ? TR::InstOpCode::CS : TR::InstOpCode::getCmpAndSwapOpCode()), IS_OBJ, true);
                return true;
                }
