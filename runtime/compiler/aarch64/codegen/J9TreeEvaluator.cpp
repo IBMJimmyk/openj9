@@ -6960,6 +6960,7 @@ J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
                {
                if (!disableCASInlining)
                   {
+                  cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                   resultReg = VMinlineCompareAndSwap(node, cg, false);
                   return true;
                   }
@@ -6977,6 +6978,7 @@ J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
                {
                if (!disableCASInlining)
                   {
+                  cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                   resultReg = VMinlineCompareAndSwap(node, cg, true);
                   return true;
                   }
@@ -6993,6 +6995,7 @@ J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
                {
                if (!disableCASInlining)
                   {
+                  cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                   resultReg = VMinlineCompareAndSwapObject(node, cg);
                   return true;
                   }
@@ -7006,6 +7009,7 @@ J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
                {
                if (!disableCAEInlining)
                   {
+                  cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                   resultReg = VMinlineCompareAndSwap(node, cg, false, true);
                   return true;
                   }
@@ -7019,6 +7023,7 @@ J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
                {
                if (!disableCAEInlining)
                   {
+                  cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                   resultReg = VMinlineCompareAndSwap(node, cg, true, true);
                   return true;
                   }
@@ -7041,6 +7046,7 @@ J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
                {
                if (!disableCAEInlining)
                   {
+                  cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                   resultReg = VMinlineCompareAndSwapObject(node, cg, true);
                   return true;
                   }

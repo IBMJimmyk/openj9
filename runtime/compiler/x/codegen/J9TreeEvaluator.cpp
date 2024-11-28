@@ -10074,13 +10074,19 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
          case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
             {
             if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
+               {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                return inlineCompareAndSwapNative(node, 4, false, false, cg);
+               }
             }
             break;
          case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
             {
             if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
+               {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                return inlineCompareAndSwapNative(node, 8, false, false, cg);
+               }
             }
             break;
          case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
@@ -10088,6 +10094,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
             static bool useOldCompareAndSwapObject = (bool)feGetEnv("TR_UseOldCompareAndSwapObject");
             if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
                {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                if (useOldCompareAndSwapObject)
                   return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, false, cg);
                else
@@ -10101,13 +10108,19 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
             {
             if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
+               {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                return inlineCompareAndSwapNative(node, 4, false, true, cg);
+               }
             }
             break;
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
             {
             if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
+               {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                return inlineCompareAndSwapNative(node, 8, false, true, cg);
+               }
             }
             break;
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
@@ -10116,6 +10129,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
             static bool useOldCompareAndSwapObject = (bool)feGetEnv("TR_UseOldCompareAndSwapObject");
             if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
                {
+               cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "zzzFastPathUnsafeCall"));
                if (useOldCompareAndSwapObject)
                   return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, true, cg);
                else
