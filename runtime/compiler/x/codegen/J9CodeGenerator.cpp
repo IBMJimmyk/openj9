@@ -548,11 +548,9 @@ static bool willNotInlineCompareAndSwapNative(TR::Node *node,
    if (TR::Compiler->om.canGenerateArraylets() && !node->isUnsafeGetPutCASCallOnNonArray())
       return true;
 
-   bool disableCASInlining = !cg->getSupportsInlineUnsafeCompareAndSet();
-   bool disableCAEInlining = !cg->getSupportsInlineUnsafeCompareAndExchange();
-   if (!isExchange && disableCASInlining)
+   if (!isExchange && !comp->cg()->getSupportsInlineUnsafeCompareAndSet())
       return true;
-   if (isExchange && disableCAEInlining)
+   if (isExchange && !comp->cg()->getSupportsInlineUnsafeCompareAndExchange())
       return true;
 
    // In Java9 the sun.misc.Unsafe JNI methods have been moved to jdk.internal,
