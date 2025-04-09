@@ -357,11 +357,15 @@ static TR::RecognizedMethod stringCanSkipBoundChecks[] =
    {
    TR::java_lang_StringLatin1_trim,
    TR::java_lang_StringUTF16_getChars_ByteArray,
+   TR::java_lang_StringUTF16_trim,
    TR::java_lang_StringLatin1_replace_char,
    TR::java_lang_StringLatin1_replace_CharSequence,
+   TR::java_lang_StringUTF16_replace_char,
    TR::java_lang_StringUTF16_replace_CharSequence,
    TR::java_lang_StringLatin1_toLowerCase,
    TR::java_lang_StringLatin1_toUpperCase,
+   TR::java_lang_StringUTF16_toLowerCase,
+   TR::java_lang_StringUTF16_toUpperCase,
    TR::unknownMethod
    };
 
