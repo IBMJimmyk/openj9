@@ -232,6 +232,12 @@
    java_lang_String_isLatin1,
    java_lang_String_startsWith,
 
+   java_lang_String_valueOf,
+   java_lang_String_subString,
+   java_lang_String_toUpperCase_void,
+   java_lang_String_deduplicateStrings,
+   java_lang_String_checkBoundsBeginEnd,
+
    java_lang_StringLatin1_indexOf,
    java_lang_StringLatin1_indexOfChar,
    java_lang_StringLatin1_inflate_BICII,
@@ -241,6 +247,11 @@
    java_lang_StringLatin1_toLowerCase,
    java_lang_StringLatin1_toUpperCase,
    java_lang_StringLatin1_trim,
+   java_lang_StringLatin1_newString,
+   java_lang_StringLatin1_toBytes,
+   java_lang_StringLatin1_toChars,
+   java_lang_StringLatin1_canEncode,
+   java_lang_StringLatin1_charAt,
 
    java_lang_StringUTF16_charAt,
    java_lang_StringUTF16_checkIndex,
@@ -282,6 +293,14 @@
    java_lang_StringBuilder_ensureCapacityImpl,
    java_lang_StringBuilder_lengthInternal,
    java_lang_StringBuilder_toString,
+
+   java_lang_AbstractStringBuilder_append_String,
+   java_lang_AbstractStringBuilder_ensureCapacityInternal,
+   java_lang_AbstractStringBuilder_inflateIfNeededFor,
+   java_lang_AbstractStringBuilder_putStringAt,
+   java_lang_AbstractStringBuilder_appendChars,
+   java_lang_AbstractStringBuilder_init,
+   java_lang_AbstractStringBuilder_append_char,
 
    java_lang_Throwable_fillInStackTrace,
    java_lang_Throwable_printStackTrace,
