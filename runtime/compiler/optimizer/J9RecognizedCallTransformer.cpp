@@ -2063,7 +2063,11 @@ void J9::RecognizedCallTransformer::transform(TR::TreeTop* treetop)
             break;
          case TR::java_lang_StrictMath_sqrt:
          case TR::java_lang_Math_sqrt:
-            process_java_lang_StrictMath_and_Math_sqrt(treetop, node);
+            static bool disableInlineMathSqrt = (feGetEnv("TR_DisableInlineMathSqrt") != NULL);
+            if (!disableInlineMathSqrt)
+               {
+               process_java_lang_StrictMath_and_Math_sqrt(treetop, node);
+               }
             break;
          case TR::java_lang_Short_reverseBytes:
             processConvertingUnaryIntrinsicFunction(treetop, node, TR::i2s, TR::sbyteswap, TR::s2i);
