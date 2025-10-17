@@ -12984,7 +12984,6 @@ static TR::Register *inlineIntrinsicIndexOfString(TR::Node *node, TR::CodeGenera
    generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, notFoundLabel, cr0Reg);
 
    /* This checks to see if there are less than 16 bytes of data left to look at. */
-   generateTrg1Src1Imm2Instruction(cg, TR::InstOpCode::rldicr, node, temp2Reg, endAddressReg, 0, CONSTANT64(0xfffffffffffffff0));
    generateTrg1Src2Instruction(cg, TR::InstOpCode::cmp8, node, cr0Reg, currentAddressReg, temp2Reg);
    generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, residueLabel, cr0Reg);
 
@@ -13000,7 +12999,6 @@ static TR::Register *inlineIntrinsicIndexOfString(TR::Node *node, TR::CodeGenera
    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, currentAddressReg, currentAddressReg, 16);
 
    /* This checks to see if there are less than 16 bytes of data left to look at. */
-   generateTrg1Src1Imm2Instruction(cg, TR::InstOpCode::rldicr, node, temp2Reg, endAddressReg, 0, CONSTANT64(0xfffffffffffffff0));
    generateTrg1Src2Instruction(cg, TR::InstOpCode::cmp8, node, cr0Reg, currentAddressReg, temp2Reg);
    generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, vectorLoopLabel, cr0Reg);
 
@@ -13130,8 +13128,9 @@ static TR::Register *inlineIntrinsicIndexOfString(TR::Node *node, TR::CodeGenera
     * The value in permuteVectorReg has not changed since it was generated so it doesn't need to be generated again.
     */
    generateTrg1Src2Instruction(cg, vectorCompareOp, node, vec2Reg, searchVectorReg, targetVectorReg);
-   generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, firstContinueLabel, cr6Reg);
-   generateLabelInstruction(cg, TR::InstOpCode::b, node, foundFirstVectorRetryLabel);
+   generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, foundFirstVectorRetryLabel, cr6Reg);
+   generateTrg1Src1Imm2Instruction(cg, TR::InstOpCode::rldicr, node, temp2Reg, endAddressReg, 0, CONSTANT64(0xfffffffffffffff0));
+   generateLabelInstruction(cg, TR::InstOpCode::b, node, firstContinueLabel);
 
    /*
     * This section handles the case where the characters to search for in the main string do not fit in a single vector load (not small case).
@@ -13198,8 +13197,9 @@ static TR::Register *inlineIntrinsicIndexOfString(TR::Node *node, TR::CodeGenera
     * The value in permuteVectorReg has not changed since it was generated so it doesn't need to be generated again.
     */
    generateTrg1Src2Instruction(cg, vectorCompareOp, node, vec2Reg, searchVectorReg, targetVectorReg);
-   generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, vectorContinueLabel, cr6Reg);
-   generateLabelInstruction(cg, TR::InstOpCode::b, node, foundVectorRetryLabel);
+   generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, foundVectorRetryLabel, cr6Reg);
+   generateTrg1Src1Imm2Instruction(cg, TR::InstOpCode::rldicr, node, temp2Reg, endAddressReg, 0, CONSTANT64(0xfffffffffffffff0));
+   generateLabelInstruction(cg, TR::InstOpCode::b, node, vectorContinueLabel);
 
    /* A full match of the substring inside the main string has been found. The index is calculated and returned in resultReg. */
    generateLabelInstruction(cg, TR::InstOpCode::label, node, foundLabel);
