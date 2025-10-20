@@ -253,6 +253,42 @@ J9::MethodSymbol::safeToSkipNullChecks()
       {
       for (int i = 0; stringCanSkipNullChecks[i] != TR::unknownMethod; ++i)
          {
+         static char *disableStringCanSkipNullChecks00 = feGetEnv("TR_DisableStringCanSkipNullChecks00");
+         static char *disableStringCanSkipNullChecks01 = feGetEnv("TR_DisableStringCanSkipNullChecks01");
+         static char *disableStringCanSkipNullChecks02 = feGetEnv("TR_DisableStringCanSkipNullChecks02");
+         static char *disableStringCanSkipNullChecks03 = feGetEnv("TR_DisableStringCanSkipNullChecks03");
+         static char *disableStringCanSkipNullChecks04 = feGetEnv("TR_DisableStringCanSkipNullChecks04");
+         static char *disableStringCanSkipNullChecks05 = feGetEnv("TR_DisableStringCanSkipNullChecks05");
+         static char *disableStringCanSkipNullChecks06 = feGetEnv("TR_DisableStringCanSkipNullChecks06");
+         static char *disableStringCanSkipNullChecks07 = feGetEnv("TR_DisableStringCanSkipNullChecks07");
+         static char *disableStringCanSkipNullChecks08 = feGetEnv("TR_DisableStringCanSkipNullChecks08");
+         static char *disableStringCanSkipNullChecks09 = feGetEnv("TR_DisableStringCanSkipNullChecks09");
+         static char *disableStringCanSkipNullChecks10 = feGetEnv("TR_DisableStringCanSkipNullChecks10");
+
+         if ((0 == i) && disableStringCanSkipNullChecks00) {
+            continue;
+         } else if ((1 == i) && disableStringCanSkipNullChecks01) {
+            continue;
+         } else if ((2 == i) && disableStringCanSkipNullChecks02) {
+            continue;
+         } else if ((3 == i) && disableStringCanSkipNullChecks03) {
+            continue;
+         } else if ((4 == i) && disableStringCanSkipNullChecks04) {
+            continue;
+         } else if ((5 == i) && disableStringCanSkipNullChecks05) {
+            continue;
+         } else if ((6 == i) && disableStringCanSkipNullChecks06) {
+            continue;
+         } else if ((7 == i) && disableStringCanSkipNullChecks07) {
+            continue;
+         } else if ((8 == i) && disableStringCanSkipNullChecks08) {
+            continue;
+         } else if ((9 == i) && disableStringCanSkipNullChecks09) {
+            continue;
+         } else if ((10 == i) && disableStringCanSkipNullChecks10) {
+            continue;
+         }
+
          if (stringCanSkipNullChecks[i] == methodId)
             {
             return true;
@@ -379,8 +415,33 @@ J9::MethodSymbol::safeToSkipBoundChecks()
    static char *disableStringChkSkips = feGetEnv("TR_DisableStringChkSkips");
    if (!disableStringChkSkips)
       {
+
       for (int i = 0; stringCanSkipBoundChecks[i] != TR::unknownMethod; ++i)
          {
+         static char *disableStringCanSkipBoundChecks00 = feGetEnv("TR_DisableStringCanSkipBoundChecks00");
+         static char *disableStringCanSkipBoundChecks01 = feGetEnv("TR_DisableStringCanSkipBoundChecks01");
+         static char *disableStringCanSkipBoundChecks03 = feGetEnv("TR_DisableStringCanSkipBoundChecks03");
+         static char *disableStringCanSkipBoundChecks04 = feGetEnv("TR_DisableStringCanSkipBoundChecks04");
+         static char *disableStringCanSkipBoundChecks06 = feGetEnv("TR_DisableStringCanSkipBoundChecks06");
+         static char *disableStringCanSkipBoundChecks07 = feGetEnv("TR_DisableStringCanSkipBoundChecks07");
+         static char *disableStringCanSkipBoundChecks08 = feGetEnv("TR_DisableStringCanSkipBoundChecks08");
+
+         if ((0 == i) && disableStringCanSkipBoundChecks00) {
+            continue;
+         } else if ((1 == i) && disableStringCanSkipBoundChecks01) {
+            continue;
+         } else if ((2 == i) && disableStringCanSkipBoundChecks03) {
+           continue;
+         } else if ((3 == i) && disableStringCanSkipBoundChecks04) {
+           continue;
+         } else if ((4 == i) && disableStringCanSkipBoundChecks06) {
+           continue;
+         } else if ((5 == i) && disableStringCanSkipBoundChecks07) {
+           continue;
+         } else if ((6 == i) && disableStringCanSkipBoundChecks08) {
+           continue;
+         }
+
          if (stringCanSkipBoundChecks[i] == methodId)
             {
             return true;
@@ -772,6 +833,27 @@ J9::MethodSymbol::safeToSkipChecksOnArrayCopies()
       {
       for (int i = 0; stringCanSkipChecksOnArrayCopies[i] != TR::unknownMethod; ++i)
          {
+         static char *disableStringCanSkipChecksOnArrayCopies11 = feGetEnv("TR_DisableStringCanSkipChecksOnArrayCopies11");
+         static char *disableStringCanSkipChecksOnArrayCopies12 = feGetEnv("TR_DisableStringCanSkipChecksOnArrayCopies12");
+         static char *disableStringCanSkipChecksOnArrayCopies07 = feGetEnv("TR_DisableStringCanSkipChecksOnArrayCopies07");
+         static char *disableStringCanSkipChecksOnArrayCopies08 = feGetEnv("TR_DisableStringCanSkipChecksOnArrayCopies08");
+         static char *disableStringCanSkipChecksOnArrayCopies09 = feGetEnv("TR_DisableStringCanSkipChecksOnArrayCopies09");
+         static char *disableStringCanSkipChecksOnArrayCopies10 = feGetEnv("TR_DisableStringCanSkipChecksOnArrayCopies10");
+
+         if ((0 == i) && disableStringCanSkipChecksOnArrayCopies11) {
+            continue;
+         } else if ((1 == i) && disableStringCanSkipChecksOnArrayCopies12) {
+            continue;
+         } else if ((2 == i) && disableStringCanSkipChecksOnArrayCopies07) {
+            continue;
+         } else if ((3 == i) && disableStringCanSkipChecksOnArrayCopies08) {
+            continue;
+         } else if ((4 == i) && disableStringCanSkipChecksOnArrayCopies09) {
+            continue;
+         } else if ((5 == i) && disableStringCanSkipChecksOnArrayCopies10) {
+            continue;
+         }
+
          if (stringCanSkipChecksOnArrayCopies[i] == methodId)
             {
             return true;
