@@ -1166,9 +1166,7 @@ void TR_InlinerBase::getBorderFrequencies(int32_t &hotBorderFrequency, int32_t &
    if (comp()->getMethodHotness() > warm)
       {
       hotBorderFrequency = comp()->isServerInlining() ? 2000 : 2500;
-      static char *coldBorderFrequencyOverride = feGetEnv("TR_coldBorderFrequencyForHighOpt");
-      static int cbf = coldBorderFrequencyOverride ? atoi(coldBorderFrequencyOverride) : 750;
-      coldBorderFrequency = cbf;
+      coldBorderFrequency = 0;
       }
    else if (!comp()->getOption(TR_DisableConservativeInlining) &&
              calleeResolvedMethod->maxBytecodeIndex() >= comp()->getOptions()->getAlwaysWorthInliningThreshold() &&
@@ -1205,9 +1203,7 @@ void TR_InlinerBase::getBorderFrequencies(int32_t &hotBorderFrequency, int32_t &
    if (comp()->getOptions()->getInlinerVeryColdBorderFrequency() >= 0)
       coldBorderFrequency = comp()->getOptions()->getInlinerVeryColdBorderFrequency();
 
-   // In case one or both of these are user-supplied, make sure they don't cross
-   // because it would be counter-intuitive and unexpected.
-   TR_ASSERT_FATAL(coldBorderFrequency <= hotBorderFrequency, "coldBorderFrequency greater than hotBorderFrequency");
+
 
    return;
    }
