@@ -248,6 +248,24 @@ static TR::RecognizedMethod stringCanSkipNullChecks[] =
    TR::unknownMethod
    };
 
+static TR::RecognizedMethod stringCanSkipNullChecksExtended[] =
+   {
+   TR::java_lang_String_init,
+   TR::java_lang_String_toUpperCase_void,
+   TR::java_lang_String_charAt,
+   TR::java_lang_String_checkBoundsBeginEnd,
+   TR::java_lang_String_checkIndex,
+   TR::java_lang_StringLatin1_toBytes,
+   TR::java_lang_StringLatin1_toChars,
+   TR::java_lang_StringLatin1_canEncode,
+   TR::java_lang_StringLatin1_charAt,
+   TR::java_lang_AbstractStringBuilder_appendChars,
+   TR::java_lang_AbstractStringBuilder_init,
+   TR::java_lang_AbstractStringBuilder_append_char,
+   TR::java_lang_String_init_AbstractStringBuilder_Void,
+   TR::unknownMethod
+   };
+
 bool
 J9::MethodSymbol::safeToSkipNullChecks()
    {
@@ -265,6 +283,18 @@ J9::MethodSymbol::safeToSkipNullChecks()
       for (int i = 0; stringCanSkipNullChecks[i] != TR::unknownMethod; ++i)
          {
          if (stringCanSkipNullChecks[i] == methodId)
+            {
+            return true;
+            }
+         }
+      }
+
+   static char *disableStringChkSkipsExtended = feGetEnv("TR_DisableStringChkSkipsExtended");
+   if (!disableStringChkSkipsExtended)
+      {
+      for (int i = 0; stringCanSkipNullChecksExtended[i] != TR::unknownMethod; ++i)
+         {
+         if (stringCanSkipNullChecksExtended[i] == methodId)
             {
             return true;
             }
@@ -377,6 +407,24 @@ static TR::RecognizedMethod stringCanSkipBoundChecks[] =
    TR::unknownMethod
    };
 
+static TR::RecognizedMethod stringCanSkipBoundChecksExtended[] =
+   {
+   TR::java_lang_String_init,
+   TR::java_lang_String_toUpperCase_void,
+   TR::java_lang_String_charAt,
+   TR::java_lang_String_checkBoundsBeginEnd,
+   TR::java_lang_String_checkIndex,
+   TR::java_lang_StringLatin1_toBytes,
+   TR::java_lang_StringLatin1_toChars,
+   TR::java_lang_StringLatin1_canEncode,
+   TR::java_lang_StringLatin1_charAt,
+   TR::java_lang_AbstractStringBuilder_appendChars,
+   TR::java_lang_AbstractStringBuilder_init,
+   TR::java_lang_AbstractStringBuilder_append_char,
+   TR::java_lang_String_init_AbstractStringBuilder_Void,
+   TR::unknownMethod
+   };
+
 bool
 J9::MethodSymbol::safeToSkipBoundChecks()
    {
@@ -394,6 +442,18 @@ J9::MethodSymbol::safeToSkipBoundChecks()
       for (int i = 0; stringCanSkipBoundChecks[i] != TR::unknownMethod; ++i)
          {
          if (stringCanSkipBoundChecks[i] == methodId)
+            {
+            return true;
+            }
+         }
+      }
+
+   static char *disableStringChkSkipsExtended = feGetEnv("TR_DisableStringChkSkipsExtended");
+   if (!disableStringChkSkipsExtended)
+      {
+      for (int i = 0; stringCanSkipBoundChecksExtended[i] != TR::unknownMethod; ++i)
+         {
+         if (stringCanSkipBoundChecksExtended[i] == methodId)
             {
             return true;
             }
@@ -762,6 +822,24 @@ static TR::RecognizedMethod stringCanSkipChecksOnArrayCopies[] =
    TR::unknownMethod
    };
 
+static TR::RecognizedMethod stringCanSkipChecksOnArrayCopiesExtended[] =
+   {
+   TR::java_lang_String_init,
+   TR::java_lang_String_toUpperCase_void,
+   TR::java_lang_String_charAt,
+   TR::java_lang_String_checkBoundsBeginEnd,
+   TR::java_lang_String_checkIndex,
+   TR::java_lang_StringLatin1_toBytes,
+   TR::java_lang_StringLatin1_toChars,
+   TR::java_lang_StringLatin1_canEncode,
+   TR::java_lang_StringLatin1_charAt,
+   TR::java_lang_AbstractStringBuilder_appendChars,
+   TR::java_lang_AbstractStringBuilder_init,
+   TR::java_lang_AbstractStringBuilder_append_char,
+   TR::java_lang_String_init_AbstractStringBuilder_Void,
+   TR::unknownMethod
+   };
+
 bool
 J9::MethodSymbol::safeToSkipChecksOnArrayCopies()
    {
@@ -785,6 +863,18 @@ J9::MethodSymbol::safeToSkipChecksOnArrayCopies()
       for (int i = 0; stringCanSkipChecksOnArrayCopies[i] != TR::unknownMethod; ++i)
          {
          if (stringCanSkipChecksOnArrayCopies[i] == methodId)
+            {
+            return true;
+            }
+         }
+      }
+
+   static char *disableStringChkSkipsExtended = feGetEnv("TR_DisableStringChkSkipsExtended");
+   if (!disableStringChkSkipsExtended)
+      {
+      for (int i = 0; stringCanSkipChecksOnArrayCopiesExtended[i] != TR::unknownMethod; ++i)
+         {
+         if (stringCanSkipChecksOnArrayCopiesExtended[i] == methodId)
             {
             return true;
             }
