@@ -238,6 +238,8 @@
    java_lang_String_toUpperCase_void,
    java_lang_String_checkBoundsBeginEnd,
 
+   java_lang_String_isEmpty,
+
    java_lang_StringLatin1_indexOf,
    java_lang_StringLatin1_indexOfChar,
    java_lang_StringLatin1_inflate_BICII,
@@ -253,6 +255,9 @@
    java_lang_StringLatin1_toChars,
    java_lang_StringLatin1_canEncode,
    java_lang_StringLatin1_charAt,
+   java_lang_StringLatin1_indexOf_BIII,
+   java_lang_StringLatin1_indexOf_BB,
+   java_lang_StringLatin1_lastIndexOf,
 
    java_lang_StringUTF16_charAt,
    java_lang_StringUTF16_checkIndex,
@@ -275,6 +280,12 @@
    java_lang_StringUTF16_toLowerCase,
    java_lang_StringUTF16_toUpperCase,
    java_lang_StringUTF16_trim,
+
+   java_util_StringTokenizer_scanToken,
+
+   java_lang_StringConcatHelper_newArray,
+   java_lang_StringConcatHelper_prepend,
+   java_lang_StringConcatHelper_mix,
 
    java_lang_StringBuffer_append,
    java_lang_StringBuffer_capacityInternal,

@@ -2816,6 +2816,7 @@ void TR_ResolvedJ9Method::construct()
       {x(TR::java_lang_String_subString,           "substring",           "(II)Ljava/lang/String;")},
       {x(TR::java_lang_String_deduplicateStrings,  "deduplicateStrings",  "(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Object;)V")},
       {x(TR::java_lang_String_checkBoundsBeginEnd, "checkBoundsBeginEnd", "(III)V")},
+      {x(TR::java_lang_String_isEmpty,             "isEmpty", "()Z")},
       {  TR::unknownMethod}
       };
 
@@ -3333,6 +3334,9 @@ void TR_ResolvedJ9Method::construct()
       { x(TR::java_lang_StringLatin1_toChars,                                 "toChars",       "([B)[C")},
       { x(TR::java_lang_StringLatin1_canEncode,                               "canEncode",     "(I)Z")},
       { x(TR::java_lang_StringLatin1_charAt,                                  "charAt",        "([BI)C")},
+      { x(TR::java_lang_StringLatin1_indexOf_BIII,                            "indexOf",       "([BIII)I")},
+      { x(TR::java_lang_StringLatin1_indexOf_BB,                              "indexOf",       "([B[B)I")},
+      { x(TR::java_lang_StringLatin1_lastIndexOf,                             "lastIndexOf",   "([BII)I")},
       { TR::unknownMethod }
       };
 
@@ -3360,6 +3364,20 @@ void TR_ResolvedJ9Method::construct()
       { x(TR::java_lang_StringUTF16_toUpperCase,                              "toUpperCase",        "(Ljava/lang/String;[BLjava/util/Locale;)Ljava/lang/String;")},
       { x(TR::java_lang_StringUTF16_trim,                                     "trim",               "([B)Ljava/lang/String;")},
       { TR::unknownMethod }
+      };
+
+   static X StringTokenizerMethods[] =
+      {
+      {x(TR::java_util_StringTokenizer_scanToken,                             "scanToken", "(I)I")},
+      {  TR::unknownMethod}
+      };
+
+   static X StringConcatHelperMethods[] =
+      {
+      {x(TR::java_lang_StringConcatHelper_newArray,                           "newArray", "(J)[B")},
+      {x(TR::java_lang_StringConcatHelper_prepend,                            "prepend",  "(J[BLjava/lang/String;)J")},
+      {x(TR::java_lang_StringConcatHelper_mix,                                "mix",      "(JLjava/lang/String;)J")},
+      {  TR::unknownMethod}
       };
 
    static X DecimalFormatHelperMethods[] =
@@ -4285,6 +4303,7 @@ void TR_ResolvedJ9Method::construct()
    static Y class25[] =
       {
       { "java/lang/invoke/Invokers", InvokersMethods },
+      { "java/util/StringTokenizer", StringTokenizerMethods },
       { 0 }
       };
 
@@ -4309,6 +4328,7 @@ void TR_ResolvedJ9Method::construct()
       { "java/lang/invoke/CatchHandle", CatchHandleMethods },
       { "com/ibm/tenant/TenantContext", MTTenantContext },
       { "java/util/stream/IntPipeline", JavaUtilStreamIntPipelineMethods },
+      { "java/lang/StringConcatHelper", StringConcatHelperMethods },
       { 0 }
       };
 
