@@ -263,6 +263,17 @@ static TR::RecognizedMethod stringCanSkipNullChecksExtended[] =
    TR::java_lang_AbstractStringBuilder_init,
    TR::java_lang_AbstractStringBuilder_append_char,
    TR::java_lang_String_init_AbstractStringBuilder_Void,
+   TR::java_lang_StringLatin1_indexOf_BIII,
+   TR::java_lang_StringLatin1_indexOf_BB,
+   TR::java_lang_StringLatin1_lastIndexOf,
+   TR::java_lang_String_startsWith,
+   TR::java_lang_String_getChars_charArray,
+   TR::java_lang_String_indexOf_native,
+   TR::java_lang_String_isEmpty,
+   TR::java_util_StringTokenizer_scanToken,
+   TR::java_lang_StringConcatHelper_newArray,
+   TR::java_lang_StringConcatHelper_prepend,
+   TR::java_lang_StringConcatHelper_mix,
    TR::unknownMethod
    };
 
@@ -422,6 +433,17 @@ static TR::RecognizedMethod stringCanSkipBoundChecksExtended[] =
    TR::java_lang_AbstractStringBuilder_init,
    TR::java_lang_AbstractStringBuilder_append_char,
    TR::java_lang_String_init_AbstractStringBuilder_Void,
+   TR::java_lang_StringLatin1_indexOf_BIII,
+   TR::java_lang_StringLatin1_indexOf_BB,
+   TR::java_lang_StringLatin1_lastIndexOf,
+   TR::java_lang_String_startsWith,
+   TR::java_lang_String_getChars_charArray,
+   TR::java_lang_String_indexOf_native,
+   TR::java_lang_String_isEmpty,
+   TR::java_util_StringTokenizer_scanToken,
+   TR::java_lang_StringConcatHelper_newArray,
+   TR::java_lang_StringConcatHelper_prepend,
+   TR::java_lang_StringConcatHelper_mix,
    TR::unknownMethod
    };
 
@@ -837,6 +859,17 @@ static TR::RecognizedMethod stringCanSkipChecksOnArrayCopiesExtended[] =
    TR::java_lang_AbstractStringBuilder_init,
    TR::java_lang_AbstractStringBuilder_append_char,
    TR::java_lang_String_init_AbstractStringBuilder_Void,
+   TR::java_lang_StringLatin1_indexOf_BIII,
+   TR::java_lang_StringLatin1_indexOf_BB,
+   TR::java_lang_StringLatin1_lastIndexOf,
+   TR::java_lang_String_startsWith,
+   TR::java_lang_String_getChars_charArray,
+   TR::java_lang_String_indexOf_native,
+   TR::java_lang_String_isEmpty,
+   TR::java_util_StringTokenizer_scanToken,
+   TR::java_lang_StringConcatHelper_newArray,
+   TR::java_lang_StringConcatHelper_prepend,
+   TR::java_lang_StringConcatHelper_mix,
    TR::unknownMethod
    };
 
