@@ -3329,7 +3329,6 @@ void TR_ResolvedJ9Method::construct()
       { x(TR::java_lang_StringLatin1_toLowerCase,                             "toLowerCase",   "(Ljava/lang/String;[BLjava/util/Locale;)Ljava/lang/String;")},
       { x(TR::java_lang_StringLatin1_toUpperCase,                             "toUpperCase",   "(Ljava/lang/String;[BLjava/util/Locale;)Ljava/lang/String;")},
       { x(TR::java_lang_StringLatin1_trim,                                    "trim",          "([B)Ljava/lang/String;")},
-      { x(TR::java_lang_StringLatin1_newString,                               "newString",     "([BII)Ljava/lang/String;")},
       { x(TR::java_lang_StringLatin1_toBytes,                                 "toBytes",       "(C)[B")},
       { x(TR::java_lang_StringLatin1_toChars,                                 "toChars",       "([B)[C")},
       { x(TR::java_lang_StringLatin1_canEncode,                               "canEncode",     "(I)Z")},

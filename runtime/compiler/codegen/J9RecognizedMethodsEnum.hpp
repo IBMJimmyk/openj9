@@ -250,7 +250,6 @@
    java_lang_StringLatin1_toLowerCase,
    java_lang_StringLatin1_toUpperCase,
    java_lang_StringLatin1_trim,
-   java_lang_StringLatin1_newString,
    java_lang_StringLatin1_toBytes,
    java_lang_StringLatin1_toChars,
    java_lang_StringLatin1_canEncode,
