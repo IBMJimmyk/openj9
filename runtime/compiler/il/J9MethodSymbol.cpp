@@ -573,25 +573,56 @@ bool J9::MethodSymbol::safeToSkipChecksOnArrayCopies()
 
 // Which recognized methods are known to not require zero initialization of arrays
 //
-static TR::RecognizedMethod canSkipZeroInitializationOnNewarrays[] = { TR::java_lang_Character_toLowerCase,
-    TR::java_lang_String_init, TR::java_lang_String_init_int_int_char_boolean, TR::java_lang_String_concat,
-    TR::java_lang_String_replace, TR::java_lang_String_toCharArray, TR::java_lang_String_toLowerCase,
+static TR::RecognizedMethod canSkipZeroInitializationOnNewarrays[] = {
+    TR::java_lang_Character_toLowerCase,
+    TR::java_lang_String_init,
+    TR::java_lang_String_init_int_int_char_boolean,
+    TR::java_lang_String_concat,
+    TR::java_lang_String_replace,
+    TR::java_lang_String_toCharArray,
+    TR::java_lang_String_toLowerCase,
     // TR::java_lang_String_toUpperCase,
     TR::java_lang_String_toLowerCaseCore,
     // TR::java_lang_String_toUpperCaseCore,
-    TR::java_lang_String_split_str_int, TR::java_math_BigDecimal_toString, TR::java_math_BigInteger_init_long,
+    TR::java_lang_String_split_str_int,
+    TR::java_math_BigDecimal_toString,
+    TR::java_math_BigInteger_init_long,
 #ifdef OPENJ9_BUILD
-    TR::java_math_BigInteger_toByteArray, TR::java_math_MutableBigInteger_divideOneWord,
+    TR::java_math_BigInteger_toByteArray,
+    TR::java_math_MutableBigInteger_divideOneWord,
 #endif // OPENJ9_BUILD
-    TR::java_math_BigInteger_stripLeadingZeroBytes1, TR::java_math_BigInteger_stripLeadingZeroBytes2,
-    TR::java_lang_Integer_toString, TR::java_lang_Long_toString, TR::java_lang_StringCoding_encode,
-    TR::java_lang_StringCoding_decode, TR::java_lang_StringCoding_StringEncoder_encode,
-    TR::java_lang_StringCoding_StringDecoder_decode, TR::sun_misc_Unsafe_allocateUninitializedArray0,
+    TR::java_math_BigInteger_stripLeadingZeroBytes1,
+    TR::java_math_BigInteger_stripLeadingZeroBytes2,
+    TR::java_lang_Integer_toString,
+    TR::java_lang_Long_toString,
+    TR::java_lang_StringCoding_encode,
+    TR::java_lang_StringCoding_decode,
+    TR::java_lang_StringCoding_StringEncoder_encode,
+    TR::java_lang_StringCoding_StringDecoder_decode,
+    TR::sun_misc_Unsafe_allocateUninitializedArray0,
     // TR::java_lang_StringBuilder_ensureCapacityImpl,
     // TR::java_lang_StringBuffer_ensureCapacityImpl,
     // TR::java_util_Arrays_copyOf,
-    TR::java_io_Writer_write_lStringII, TR::java_io_Writer_write_I, TR::java_util_regex_Matcher_init,
-    TR::java_util_regex_Matcher_usePattern, TR::unknownMethod };
+    TR::java_io_Writer_write_lStringII,
+    TR::java_io_Writer_write_I,
+    TR::java_util_regex_Matcher_init,
+    TR::java_util_regex_Matcher_usePattern,
+    TR::unknownMethod };
+
+static TR::RecognizedMethod stringCanSkipZeroInitializationOnNewarrays[] = {
+    TR::java_lang_StringUTF16_compress_BII,
+    TR::java_lang_StringUTF16_compress_CII,
+    TR::java_lang_StringUTF16_compress_III,
+    TR::java_lang_StringUTF16_toChars,
+    TR::java_lang_StringUTF16_toBytes_C,
+    TR::java_lang_StringUTF16_toBytesSupplementary,
+    TR::java_lang_StringLatin1_toBytes_III,
+    TR::java_lang_StringUTF16_replace_char,
+    TR::java_lang_StringLatin1_toChars,
+    TR::java_lang_StringLatin1_toLowerCase,
+    TR::java_lang_StringLatin1_toUpperCase,
+    TR::java_lang_StringLatin1_toBytes,
+    TR::unknownMethod };
 
 bool J9::MethodSymbol::safeToSkipZeroInitializationOnNewarrays()
 {
@@ -602,6 +633,15 @@ bool J9::MethodSymbol::safeToSkipZeroInitializationOnNewarrays()
     for (int i = 0; canSkipZeroInitializationOnNewarrays[i] != TR::unknownMethod; ++i)
         if (canSkipZeroInitializationOnNewarrays[i] == methodId)
             return true;
+
+    static char *disableStringZeroInitSkips = feGetEnv("TR_DisableStringZeroInitSkips");
+    if (!disableStringZeroInitSkips) {
+        for (int i = 0; stringCanSkipZeroInitializationOnNewarrays[i] != TR::unknownMethod; ++i) {
+            if (stringCanSkipZeroInitializationOnNewarrays[i] == methodId) {
+                return true;
+            }
+        }
+    }
 
     return false;
 }
