@@ -634,8 +634,8 @@ bool J9::MethodSymbol::safeToSkipZeroInitializationOnNewarrays()
         if (canSkipZeroInitializationOnNewarrays[i] == methodId)
             return true;
 
-    static char *disableStringZeroInitSkips = feGetEnv("TR_DisableStringZeroInitSkips");
-    if (!disableStringZeroInitSkips) {
+    static char *enableStringZeroInitSkips = feGetEnv("TR_EnableStringZeroInitSkips");
+    if (enableStringZeroInitSkips) {
         for (int i = 0; stringCanSkipZeroInitializationOnNewarrays[i] != TR::unknownMethod; ++i) {
             if (stringCanSkipZeroInitializationOnNewarrays[i] == methodId) {
                 return true;
