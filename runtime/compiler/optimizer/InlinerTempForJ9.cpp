@@ -3191,6 +3191,35 @@ bool TR_J9InlinerPolicy::skipHCRGuardForCallee(TR_ResolvedMethod *callee)
     if (length > 17 && !strncmp("java/lang/invoke/", className, 17) && !callee->isPublic())
         return true;
 
+    static const bool disableHCRGuards = feGetEnv("TR_DisableHCRGuards") != NULL;
+    static const bool disableHCRGuardSet = feGetEnv("TR_DisableHCRGuardSet") != NULL;
+    if ((disableHCRGuards || disableHCRGuardSet) &&
+         ((length == 15 && !strncmp(className, "java/lang/Class", length))
+       || (length == 16 && !strncmp(className, "java/lang/Object", length))
+       || (length == 16 && !strncmp(className, "java/lang/String", length))
+       || (length == 16 && !strncmp(className, "java/lang/System", length))
+       || (length == 21 && !strncmp(className, "java/lang/StringUTF16", length))
+       || (length == 21 && !strncmp(className, "java/lang/ThreadLocal", length))
+       || (length == 22 && !strncmp(className, "java/lang/StringLatin1", length))
+       )) {
+        return true;
+    }
+
+    static const bool disableHCRGuardSetExtended = feGetEnv("TR_DisableHCRGuardSetExtended") != NULL;
+    if ((disableHCRGuards || disableHCRGuardSetExtended) &&
+         ((length >  8 && !strncmp(className, "java/io/", length))
+       || (length >  9 && !strncmp(className, "java/net/", length))
+       || (length >  9 && !strncmp(className, "java/nio/", length))
+       || (length > 10 && !strncmp(className, "java/util/", length))
+       || (length > 10 && !strncmp(className, "java/lang/", length))
+       || (length > 10 && !strncmp(className, "java/math/", length))
+       || (length > 10 && !strncmp(className, "java/text/", length))
+       || (length > 10 && !strncmp(className, "java/time/", length))
+       || (length > 14 && !strncmp(className, "java/security/", length))
+       )) {
+        return true;
+    }
+
     return false;
 }
 
