@@ -1329,6 +1329,41 @@ void J9::ValuePropagation::constrainRecognizedMethod(TR::Node *node)
     static const char *disableHCRGuards = feGetEnv("TR_DisableHCRGuards");
     bool transformNonnativeMethodInPlace = disableHCRGuards || comp()->getHCRMode() == TR::none;
 
+    int32_t length = calledMethod->classNameLength();
+    char *className = calledMethod->classNameChars();
+
+    static const bool disableHCRGuardSet = feGetEnv("TR_DisableHCRGuardSetVP") != NULL;
+    if ((disableHCRGuards || disableHCRGuardSet) &&
+         ((length == 15 && !strncmp(className, "java/lang/Class", length))
+       || (length == 16 && !strncmp(className, "java/lang/Object", length))
+       || (length == 16 && !strncmp(className, "java/lang/String", length))
+       || (length == 16 && !strncmp(className, "java/lang/System", length))
+       || (length == 21 && !strncmp(className, "java/lang/StringUTF16", length))
+       || (length == 21 && !strncmp(className, "java/lang/ThreadLocal", length))
+       || (length == 22 && !strncmp(className, "java/lang/StringLatin1", length))
+       )) {
+        transformNonnativeMethodInPlace = true;
+        logprintf(trace(), log, "TR_DisableHCRGuardSetVP - force transformNonnativeMethodInPlace. Signature: %s, node %p, transformNonnativeMethodInPlace: %d\n",
+                  signature, node, transformNonnativeMethodInPlace);
+    }
+
+    static const bool disableHCRGuardSetExtended = feGetEnv("TR_DisableHCRGuardSetExtendedVP") != NULL;
+    if ((disableHCRGuards || disableHCRGuardSetExtended) &&
+         ((length >  8 && !strncmp(className, "java/io/", length))
+       || (length >  9 && !strncmp(className, "java/net/", length))
+       || (length >  9 && !strncmp(className, "java/nio/", length))
+       || (length > 10 && !strncmp(className, "java/util/", length))
+       || (length > 10 && !strncmp(className, "java/lang/", length))
+       || (length > 10 && !strncmp(className, "java/math/", length))
+       || (length > 10 && !strncmp(className, "java/text/", length))
+       || (length > 10 && !strncmp(className, "java/time/", length))
+       || (length > 14 && !strncmp(className, "java/security/", length))
+       )) {
+        transformNonnativeMethodInPlace = true;
+        logprintf(trace(), log, "TR_DisableHCRGuardSetExtendedVP - force transformNonnativeMethodInPlace. Signature: %s, node %p, transformNonnativeMethodInPlace: %d\n",
+                  signature, node, transformNonnativeMethodInPlace);
+    }
+
     logprintf(trace(), log, "Trying to compute the result of call to %s on node %p at compile time\n", signature, node);
     // This switch is used for transformations with AOT support
     switch (rm) {

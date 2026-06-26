@@ -3202,6 +3202,7 @@ bool TR_J9InlinerPolicy::skipHCRGuardForCallee(TR_ResolvedMethod *callee)
        || (length == 21 && !strncmp(className, "java/lang/ThreadLocal", length))
        || (length == 22 && !strncmp(className, "java/lang/StringLatin1", length))
        )) {
+        logprintf(true, comp()->log(), "TR_DisableHCRGuardSet - force skipHCRGuardForCallee. className: %s\n", className);
         return true;
     }
 
@@ -3217,6 +3218,7 @@ bool TR_J9InlinerPolicy::skipHCRGuardForCallee(TR_ResolvedMethod *callee)
        || (length > 10 && !strncmp(className, "java/time/", length))
        || (length > 14 && !strncmp(className, "java/security/", length))
        )) {
+        logprintf(true, comp()->log(), "TR_DisableHCRGuardSetExtended - force skipHCRGuardForCallee. className: %s\n", className);
         return true;
     }
 
