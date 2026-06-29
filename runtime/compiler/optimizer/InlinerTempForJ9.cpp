@@ -3191,9 +3191,9 @@ bool TR_J9InlinerPolicy::skipHCRGuardForCallee(TR_ResolvedMethod *callee)
     if (length > 17 && !strncmp("java/lang/invoke/", className, 17) && !callee->isPublic())
         return true;
 
-    static const bool disableHCRGuards = feGetEnv("TR_DisableHCRGuards") != NULL;
     static const bool disableHCRGuardSet = feGetEnv("TR_DisableHCRGuardSet") != NULL;
-    if ((disableHCRGuards || disableHCRGuardSet) &&
+    static const bool printHCRGuardSkip = feGetEnv("TR_PrintHCRGuardSkip") != NULL;
+    if (disableHCRGuardSet &&
          ((length == 15 && !strncmp(className, "java/lang/Class", length))
        || (length == 16 && !strncmp(className, "java/lang/Object", length))
        || (length == 16 && !strncmp(className, "java/lang/String", length))
@@ -3203,11 +3203,12 @@ bool TR_J9InlinerPolicy::skipHCRGuardForCallee(TR_ResolvedMethod *callee)
        || (length == 22 && !strncmp(className, "java/lang/StringLatin1", length))
        )) {
         logprintf(true, comp()->log(), "TR_DisableHCRGuardSet - force skipHCRGuardForCallee. className: %s\n", className);
+        if (printHCRGuardSkip) printf("TR_DisableHCRGuardSet - force skipHCRGuardForCallee. className: %s, compiled method: %s\n", className, comp()->signature());
         return true;
     }
 
     static const bool disableHCRGuardSetExtended = feGetEnv("TR_DisableHCRGuardSetExtended") != NULL;
-    if ((disableHCRGuards || disableHCRGuardSetExtended) &&
+    if (disableHCRGuardSetExtended &&
          ((length >  8 && !strncmp(className, "java/io/", length))
        || (length >  9 && !strncmp(className, "java/net/", length))
        || (length >  9 && !strncmp(className, "java/nio/", length))
@@ -3219,6 +3220,13 @@ bool TR_J9InlinerPolicy::skipHCRGuardForCallee(TR_ResolvedMethod *callee)
        || (length > 14 && !strncmp(className, "java/security/", length))
        )) {
         logprintf(true, comp()->log(), "TR_DisableHCRGuardSetExtended - force skipHCRGuardForCallee. className: %s\n", className);
+        if (printHCRGuardSkip) printf("TR_DisableHCRGuardSetExtended - force skipHCRGuardForCallee. className: %s, compiled method: %s\n", className, comp()->signature());
+        return true;
+    }
+
+    static const bool forceSkipHCRGuardForCallee = feGetEnv("TR_ForceSkipHCRGuardForCallee") != NULL;
+    if (forceSkipHCRGuardForCallee) {
+        if (printHCRGuardSkip) printf("TR_ForceSkipHCRGuardForCallee - force skipHCRGuardForCallee. className: %s, compiled method: %s\n", className, comp()->signature());
         return true;
     }
 

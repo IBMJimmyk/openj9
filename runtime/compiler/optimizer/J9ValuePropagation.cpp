@@ -1327,13 +1327,15 @@ void J9::ValuePropagation::constrainRecognizedMethod(TR::Node *node)
     const char *signature = calledMethod->signature(comp()->trMemory(), stackAlloc);
 
     static const char *disableHCRGuards = feGetEnv("TR_DisableHCRGuards");
-    bool transformNonnativeMethodInPlace = disableHCRGuards || comp()->getHCRMode() == TR::none;
+    static const char *disableHCRGuardsInVP = feGetEnv("TR_DisableHCRGuardsInVP");
+    static const bool printHCRGuardSkip = feGetEnv("TR_PrintHCRGuardSkip") != NULL;
+    bool transformNonnativeMethodInPlace = disableHCRGuardsInVP || disableHCRGuards || comp()->getHCRMode() == TR::none;
 
     int32_t length = calledMethod->classNameLength();
     char *className = calledMethod->classNameChars();
 
     static const bool disableHCRGuardSet = feGetEnv("TR_DisableHCRGuardSetVP") != NULL;
-    if ((disableHCRGuards || disableHCRGuardSet) &&
+    if (disableHCRGuardSet &&
          ((length == 15 && !strncmp(className, "java/lang/Class", length))
        || (length == 16 && !strncmp(className, "java/lang/Object", length))
        || (length == 16 && !strncmp(className, "java/lang/String", length))
@@ -1345,10 +1347,12 @@ void J9::ValuePropagation::constrainRecognizedMethod(TR::Node *node)
         transformNonnativeMethodInPlace = true;
         logprintf(trace(), log, "TR_DisableHCRGuardSetVP - force transformNonnativeMethodInPlace. Signature: %s, node %p, transformNonnativeMethodInPlace: %d\n",
                   signature, node, transformNonnativeMethodInPlace);
+        if (printHCRGuardSkip) printf("TR_DisableHCRGuardSetVP - force transformNonnativeMethodInPlace. Compiled Method: %s, Called Method: %s, node %p, transformNonnativeMethodInPlace: %d\n",
+               comp()->signature(), signature, node, transformNonnativeMethodInPlace);
     }
 
     static const bool disableHCRGuardSetExtended = feGetEnv("TR_DisableHCRGuardSetExtendedVP") != NULL;
-    if ((disableHCRGuards || disableHCRGuardSetExtended) &&
+    if (disableHCRGuardSetExtended &&
          ((length >  8 && !strncmp(className, "java/io/", length))
        || (length >  9 && !strncmp(className, "java/net/", length))
        || (length >  9 && !strncmp(className, "java/nio/", length))
@@ -1362,6 +1366,8 @@ void J9::ValuePropagation::constrainRecognizedMethod(TR::Node *node)
         transformNonnativeMethodInPlace = true;
         logprintf(trace(), log, "TR_DisableHCRGuardSetExtendedVP - force transformNonnativeMethodInPlace. Signature: %s, node %p, transformNonnativeMethodInPlace: %d\n",
                   signature, node, transformNonnativeMethodInPlace);
+        if (printHCRGuardSkip) printf("TR_DisableHCRGuardSetExtendedVP - force transformNonnativeMethodInPlace. Compiled Method: %s, Called Method: %s, node %p, transformNonnativeMethodInPlace: %d\n",
+               comp()->signature(), signature, node, transformNonnativeMethodInPlace);
     }
 
     logprintf(trace(), log, "Trying to compute the result of call to %s on node %p at compile time\n", signature, node);
