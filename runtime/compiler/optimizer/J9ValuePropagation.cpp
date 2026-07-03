@@ -1353,15 +1353,26 @@ void J9::ValuePropagation::constrainRecognizedMethod(TR::Node *node)
 
     static const bool disableHCRGuardSetExtended = feGetEnv("TR_DisableHCRGuardSetExtendedVP") != NULL;
     if (disableHCRGuardSetExtended &&
-         ((length >  8 && !strncmp(className, "java/io/", length))
-       || (length >  9 && !strncmp(className, "java/net/", length))
-       || (length >  9 && !strncmp(className, "java/nio/", length))
-       || (length > 10 && !strncmp(className, "java/util/", length))
-       || (length > 10 && !strncmp(className, "java/lang/", length))
-       || (length > 10 && !strncmp(className, "java/math/", length))
-       || (length > 10 && !strncmp(className, "java/text/", length))
-       || (length > 10 && !strncmp(className, "java/time/", length))
-       || (length > 14 && !strncmp(className, "java/security/", length))
+         ((length >  8 && !strncmp(className, "java/io/",        8))
+       || (length >  9 && !strncmp(className, "java/net/",       9))
+       || (length >  9 && !strncmp(className, "java/nio/",       9))
+       || (length > 10 && !strncmp(className, "java/util/",     10))
+       || (length > 10 && !strncmp(className, "java/lang/",     10))
+       || (length > 10 && !strncmp(className, "java/math/",     10))
+       || (length > 10 && !strncmp(className, "java/text/",     10))
+       || (length > 10 && !strncmp(className, "java/time/",     10))
+       || (length > 14 && !strncmp(className, "java/security/", 14))
+
+       || (length >  8 && !strncmp(className, "sun/net/",       8))
+       || (length >  8 && !strncmp(className, "sun/nio/",       8))
+       || (length >  9 && !strncmp(className, "sun/text/",      9))
+       || (length >  9 && !strncmp(className, "sun/util/",      9))
+       || (length > 11 && !strncmp(className, "sun/invoke/",   11))
+       || (length > 12 && !strncmp(className, "sun/reflect/",  12))
+       || (length > 13 && !strncmp(className, "sun/launcher/", 13))
+       || (length > 13 && !strncmp(className, "sun/security/", 13))
+
+       || (length > 13 && !strncmp(className, "jdk/internal/", 13))
        )) {
         transformNonnativeMethodInPlace = true;
         logprintf(trace(), log, "TR_DisableHCRGuardSetExtendedVP - force transformNonnativeMethodInPlace. Signature: %s, node %p, transformNonnativeMethodInPlace: %d\n",
