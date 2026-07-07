@@ -827,6 +827,157 @@ void J9::RecognizedCallTransformer::process_java_lang_StringCoding_encodeASCII(T
     cfg->removeEdge(fallthroughBlock, fallbackPathBlock);
 }
 
+void J9::RecognizedCallTransformer::process_java_lang_StringUTF16_compress_CIBII(TR::TreeTop *treetop, TR::Node *node)
+{
+    TransformUtil::createTempsForCall(this, treetop);
+
+    TR::Node *srcObjNode = node->getFirstChild();
+    TR::Node *srcOffNode = node->getSecondChild();
+    TR::Node *dstObjNode = node->getChild(2);
+    TR::Node *dstOffNode = node->getChild(3);
+    TR::Node *copyLenNode = node->getChild(4);
+
+    TR::TreeTop *slowPathTreeTop = TR::TreeTop::create(comp(), treetop->getNode()->duplicateTree());
+    slowPathTreeTop->getNode()->getFirstChild()->setSkippedInRecognizedCallTransformation(true);
+
+    TR::Node *arrayTranslateNode = TR::Node::create(node, TR::arraytranslate, 6);
+    arrayTranslateNode->setSourceIsByteArrayTranslate(false);
+    arrayTranslateNode->setTargetIsByteArrayTranslate(true);
+    arrayTranslateNode->setTermCharNodeIsHint(false);
+    arrayTranslateNode->setSourceCellIsTermChar(false);
+    arrayTranslateNode->setTableBackedByRawStorage(true);
+    arrayTranslateNode->setSymbolReference(comp()->getSymRefTab()->findOrCreateArrayTranslateSymbol());
+
+    TR::Node *srcIndexOffsetNode = TR::TransformUtil::generateConvertArrayElementIndexToOffsetTrees(comp(), srcOffNode->duplicateTree(), NULL, 2, false);
+    TR::Node *srcAddrNode = TR::TransformUtil::generateArrayElementAddressTrees(comp(), srcObjNode->duplicateTree(), srcIndexOffsetNode);
+
+    TR::Node *dstIndexOffsetNode = TR::TransformUtil::generateConvertArrayElementIndexToOffsetTrees(comp(), dstOffNode->duplicateTree(), NULL, 1, false);
+    TR::Node *dstAddrNode = TR::TransformUtil::generateArrayElementAddressTrees(comp(), dstObjNode->duplicateTree(), dstIndexOffsetNode);
+
+    TR::Node *tableNode = TR::Node::create(node, TR::iconst, 0, 0); // dummy table node
+    TR::Node *termCharNode = TR::Node::create(node, TR::iconst, 0, 0xff00ff00); // mask for ISO 8859-1 decoder
+    TR::Node *stoppingNode = TR::Node::create(node, TR::iconst, 0, -1); // dummy stop index node
+
+    arrayTranslateNode->setAndIncChild(0, srcAddrNode);
+    arrayTranslateNode->setAndIncChild(1, dstAddrNode);
+    arrayTranslateNode->setAndIncChild(2, tableNode);
+    arrayTranslateNode->setAndIncChild(3, termCharNode);
+    arrayTranslateNode->setAndIncChild(4, copyLenNode->duplicateTree());
+    arrayTranslateNode->setAndIncChild(5, stoppingNode);
+
+    // Mark arraytranslateNode as inlinedByCG as it is an intrinsic that should not be treated as a regular call by the
+    // inliner
+    arrayTranslateNode->getSymbolReference()->getSymbol()->castToMethodSymbol()->setIsInlinedByCG();
+    TR::Node *arraytranslateAnchorNode = TR::Node::create(TR::treetop, 1, arrayTranslateNode);
+    TR::TreeTop *arrayTranslateTreeTop = TR::TreeTop::create(comp(), arraytranslateAnchorNode);
+
+    // if (length < 0) { call the original method }
+    TR::Node *constZeroNode1 = TR::Node::create(node, TR::iconst, 0, 0);
+    TR::Node *ifCmpNode1 = TR::Node::createif(TR::ificmplt, copyLenNode->duplicateTree(), constZeroNode1);
+    TR::TreeTop *ifCmpTreeTop1 = TR::TreeTop::create(comp(), ifCmpNode1);
+    // if (srcOff < 0) { call the original method }
+    TR::Node *constZeroNode2 = TR::Node::create(node, TR::iconst, 0, 0);
+    TR::Node *ifCmpNode2 = TR::Node::createif(TR::ificmplt, srcOffNode->duplicateTree(), constZeroNode2);
+    TR::TreeTop *ifCmpTreeTop2 = TR::TreeTop::create(comp(), ifCmpNode2);
+    // if (srcObj.length - srcOff < length) { call the original method }
+    TR::Node *arrayLenNode1 = TR::Node::create(node, TR::arraylength, 1, srcObjNode->duplicateTree());
+    TR::Node *isubNode1 = TR::Node::create(node, TR::isub, 2, arrayLenNode1, srcOffNode->duplicateTree());
+    TR::Node *ifCmpNode3 = TR::Node::createif(TR::ificmplt, isubNode1, copyLenNode->duplicateTree());
+    TR::TreeTop *ifCmpTreeTop3 = TR::TreeTop::create(comp(), ifCmpNode3);
+    // if (dstOff < 0) { call the original method }
+    TR::Node *constZeroNode3 = TR::Node::create(node, TR::iconst, 0, 0);
+    TR::Node *ifCmpNode4 = TR::Node::createif(TR::ificmplt, dstOffNode->duplicateTree(), constZeroNode3);
+    TR::TreeTop *ifCmpTreeTop4 = TR::TreeTop::create(comp(), ifCmpNode4);
+    // if (dstObj.length - dstOff < length) { call the original method }
+    TR::Node *arrayLenNode2 = TR::Node::create(node, TR::arraylength, 1, dstObjNode->duplicateTree());
+    TR::Node *isubNode2 = TR::Node::create(node, TR::isub, 2, arrayLenNode2, dstOffNode->duplicateTree());
+    TR::Node *ifCmpNode5 = TR::Node::createif(TR::ificmplt, isubNode2, copyLenNode->duplicateTree());
+    TR::TreeTop *ifCmpTreeTop5 = TR::TreeTop::create(comp(), ifCmpNode5);
+
+    TR::SymbolReference *newSymbolReference = NULL;
+    TR::DataType dataType = node->getDataType();
+
+    if (node->getReferenceCount() > 1) {
+        newSymbolReference = comp()->getSymRefTab()->createTemporary(comp()->getMethodSymbol(), dataType);
+        TR::Node::recreate(node, comp()->il.opCodeForDirectLoad(dataType));
+        node->setSymbolReference(newSymbolReference);
+        node->removeAllChildren();
+    }
+
+    TR::Block *callBlock = treetop->getEnclosingBlock();
+
+    callBlock->createConditionalBlocksBeforeTree(treetop, ifCmpTreeTop1, slowPathTreeTop, arrayTranslateTreeTop, comp()->getFlowGraph(), false, true);
+
+    if (newSymbolReference) {
+        TR::Node *fastPathStoreNode = TR::Node::createWithSymRef(comp()->il.opCodeForDirectStore(dataType), 1, 1,
+            arrayTranslateNode, newSymbolReference);
+        TR::TreeTop *fastPathStoreTree = TR::TreeTop::create(comp(), fastPathStoreNode);
+        arrayTranslateTreeTop->insertAfter(fastPathStoreTree);
+
+        TR::Node *slowPathStoreNode = TR::Node::createWithSymRef(comp()->il.opCodeForDirectStore(dataType), 1, 1,
+            slowPathTreeTop->getNode()->getFirstChild(), newSymbolReference);
+        TR::TreeTop *slowPathStoreTree = TR::TreeTop::create(comp(), slowPathStoreNode);
+        slowPathTreeTop->insertAfter(slowPathStoreTree);
+    }
+
+    TR::Block *srcOffCmpBlock = TR::Block::createEmptyBlock(ifCmpNode1, comp(), 0, NULL);
+    srcOffCmpBlock->setFrequency(callBlock->getFrequency());
+    comp()->getFlowGraph()->addNode(srcOffCmpBlock);
+
+    TR::Block *srcLenCmpBlock = TR::Block::createEmptyBlock(ifCmpNode1, comp(), 0, NULL);
+    srcLenCmpBlock->setFrequency(callBlock->getFrequency());
+    comp()->getFlowGraph()->addNode(srcLenCmpBlock);
+
+    TR::Block *dstOffCmpBlock = TR::Block::createEmptyBlock(ifCmpNode1, comp(), 0, NULL);
+    dstOffCmpBlock->setFrequency(callBlock->getFrequency());
+    comp()->getFlowGraph()->addNode(dstOffCmpBlock);
+
+    TR::Block *dstLenCmpBlock = TR::Block::createEmptyBlock(ifCmpNode1, comp(), 0, NULL);
+    dstLenCmpBlock->setFrequency(callBlock->getFrequency());
+    comp()->getFlowGraph()->addNode(dstLenCmpBlock);
+
+    callBlock->getExit()->join(srcOffCmpBlock->getEntry());
+    srcOffCmpBlock->getExit()->join(srcLenCmpBlock->getEntry());
+    srcLenCmpBlock->getExit()->join(dstOffCmpBlock->getEntry());
+    dstOffCmpBlock->getExit()->join(dstLenCmpBlock->getEntry());
+    dstLenCmpBlock->getExit()->join(arrayTranslateTreeTop->getEnclosingBlock()->getEntry());
+
+    comp()->getFlowGraph()->copyExceptionSuccessors(callBlock, srcOffCmpBlock);
+    comp()->getFlowGraph()->copyExceptionSuccessors(callBlock, srcLenCmpBlock);
+    comp()->getFlowGraph()->copyExceptionSuccessors(callBlock, dstOffCmpBlock);
+    comp()->getFlowGraph()->copyExceptionSuccessors(callBlock, dstLenCmpBlock);
+
+    srcOffCmpBlock->append(ifCmpTreeTop2);
+    srcLenCmpBlock->append(ifCmpTreeTop3);
+    dstOffCmpBlock->append(ifCmpTreeTop4);
+    dstLenCmpBlock->append(ifCmpTreeTop5);
+
+    ifCmpNode2->setBranchDestination(ifCmpNode1->getBranchDestination());
+    ifCmpNode3->setBranchDestination(ifCmpNode1->getBranchDestination());
+    ifCmpNode4->setBranchDestination(ifCmpNode1->getBranchDestination());
+    ifCmpNode5->setBranchDestination(ifCmpNode1->getBranchDestination());
+
+    comp()->getFlowGraph()->addEdge(TR::CFGEdge::createEdge(callBlock, srcOffCmpBlock, comp()->trMemory()));
+    comp()->getFlowGraph()->addEdge(TR::CFGEdge::createEdge(srcOffCmpBlock, srcLenCmpBlock, comp()->trMemory()));
+    comp()->getFlowGraph()->addEdge(TR::CFGEdge::createEdge(srcLenCmpBlock, dstOffCmpBlock, comp()->trMemory()));
+    comp()->getFlowGraph()->addEdge(TR::CFGEdge::createEdge(dstOffCmpBlock, dstLenCmpBlock, comp()->trMemory()));
+    comp()->getFlowGraph()->addEdge(TR::CFGEdge::createEdge(dstLenCmpBlock, arrayTranslateTreeTop->getEnclosingBlock(), comp()->trMemory()));
+
+    comp()->getFlowGraph()->addEdge(TR::CFGEdge::createEdge(srcOffCmpBlock, slowPathTreeTop->getEnclosingBlock(), comp()->trMemory()));
+    comp()->getFlowGraph()->addEdge(TR::CFGEdge::createEdge(srcLenCmpBlock, slowPathTreeTop->getEnclosingBlock(), comp()->trMemory()));
+    comp()->getFlowGraph()->addEdge(TR::CFGEdge::createEdge(dstOffCmpBlock, slowPathTreeTop->getEnclosingBlock(), comp()->trMemory()));
+    comp()->getFlowGraph()->addEdge(TR::CFGEdge::createEdge(dstLenCmpBlock, slowPathTreeTop->getEnclosingBlock(), comp()->trMemory()));
+
+    comp()->getFlowGraph()->removeEdge(callBlock, arrayTranslateTreeTop->getEnclosingBlock());
+
+    TR::DebugCounter::prependDebugCounter(comp(),
+            TR::DebugCounter::debugCounterName(comp(), "treesIntrinsicUTF16Compress/fast/(%s)", comp()->signature()),
+            arrayTranslateTreeTop);
+    TR::DebugCounter::prependDebugCounter(comp(),
+            TR::DebugCounter::debugCounterName(comp(), "treesIntrinsicUTF16Compress/slow/(%s)", comp()->signature()),
+            slowPathTreeTop);
+}
+
 void J9::RecognizedCallTransformer::process_java_lang_StringLatin1_compareTo_BBII(TR::TreeTop *treetop, TR::Node *node)
 {
     /*
@@ -2685,6 +2836,7 @@ bool J9::RecognizedCallTransformer::isInlineable(TR::TreeTop *treetop)
     auto node = treetop->getNode()->getFirstChild();
     TR::RecognizedMethod rm = node->getSymbol()->castToMethodSymbol()->getMandatoryRecognizedMethod();
 
+    static const bool enableStringUTF16CompressTransform = (feGetEnv("TR_EnableStringUTF16CompressTransform") != NULL);
     bool isILGenPass = !getLastRun();
     static const bool disableStringIntrinsicBoundChk = (feGetEnv("TR_DisableStringIntrinsicBoundChk") != NULL);
     if (isILGenPass) {
@@ -2788,6 +2940,9 @@ bool J9::RecognizedCallTransformer::isInlineable(TR::TreeTop *treetop)
                 return (!disableStringIntrinsicBoundChk && cg()->getSupportsInlineStringIndexOfString()
                     && !node->isSafeForCGToInlineStringIntrinsic() && !node->isSkippedInRecognizedCallTransformation());
 #endif /* JAVA_SPEC_VERSION < 25 */
+            case TR::java_lang_StringUTF16_compress_CIBII:
+                //return (cg()->getSupportsArrayTranslateTRTO255()); //TODO: figure out support restrictions
+                return (enableStringUTF16CompressTransform && !node->isSkippedInRecognizedCallTransformation());
             case TR::jdk_internal_util_ArraysSupport_vectorizedMismatch:
                 return cg()->getSupportsInlineVectorizedMismatch();
 #if JAVA_SPEC_VERSION >= 21
@@ -2975,6 +3130,9 @@ void J9::RecognizedCallTransformer::transform(TR::TreeTop *treetop)
                 process_java_lang_StringLatin1_indexOf_BIBII(treetop, node, true /* isLatin1 */);
                 break;
 #endif /* JAVA_SPEC_VERSION < 25 */
+            case TR::java_lang_StringUTF16_compress_CIBII:
+                process_java_lang_StringUTF16_compress_CIBII(treetop, node);
+                break;
             case TR::java_lang_StrictMath_sqrt:
             case TR::java_lang_Math_sqrt:
                 process_java_lang_StrictMath_and_Math_sqrt(treetop, node);
