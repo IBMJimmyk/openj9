@@ -137,6 +137,13 @@ void J9::X86::CodeGenerator::initialize()
         cg->setSupportsInlineVectorizedMismatch();
     }
 
+    //TODO: add 32 bit support?
+    //static const bool disableStringCompressIntrinsic = feGetEnv("TR_DisableStringCompressIntrinsic") != NULL;
+    static const bool disableStringCompressIntrinsic = feGetEnv("TR_EnableStringCompressIntrinsic") == NULL;
+    if (comp->target().is64Bit() && !TR::Compiler->om.canGenerateArraylets() && !disableStringCompressIntrinsic) {
+        cg->setSupportsInlineStringUTF16Compress();
+    }
+
     static bool disableCASInlining = feGetEnv("TR_DisableCASInlining") != NULL;
     if (!disableCASInlining) {
         cg->setSupportsInlineUnsafeCompareAndSet();

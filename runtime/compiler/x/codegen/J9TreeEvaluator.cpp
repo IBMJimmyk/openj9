@@ -12943,6 +12943,7 @@ TR::Register *J9::X86::TreeEvaluator::directCallEvaluator(TR::Node *node, TR::Co
     }
 
     static const bool disableStringIntrinsicBoundChk = (feGetEnv("TR_DisableStringIntrinsicBoundChk") != NULL);
+    static const bool enableStringUTF16CompressCodegenOptCounters = (feGetEnv("TR_EnableStringUTF16CompressCodegenOptCounters") != NULL);
 
     switch (symbol->getMandatoryRecognizedMethod()) {
         case TR::java_lang_StringLatin1_indexOfChar:
@@ -13097,6 +13098,19 @@ TR::Register *J9::X86::TreeEvaluator::directCallEvaluator(TR::Node *node, TR::Co
                 }
 #endif /* JAVA_SPEC_VERSION < 25 */
                 return TR::TreeEvaluator::inlineStringLatin1Inflate(node, cg);
+            }
+            break;
+#if JAVA_SPEC_VERSION < 27
+        case TR::java_lang_StringUTF16_compress_CIBII:
+#else
+        case TR::java_lang_StringUTF16_compress0_CIBII:
+#endif
+            if (getSupportsInlineStringUTF16Compress()) {
+                if (enableStringUTF16CompressCodegenOptCounters) {
+                    return TR::TreeEvaluator::inlineStringUTF16Compress_Counters(node, cg);
+                } else {
+                    return TR::TreeEvaluator::inlineStringUTF16Compress(node, cg);
+                }
             }
             break;
         case TR::java_lang_Math_fma_F:
@@ -13330,6 +13344,379 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringLatin1Inflate(TR::Node *node, 
     }
 
     return NULL;
+}
+
+TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress_Counters(TR::Node *node, TR::CodeGenerator *cg)
+{
+    TR_ASSERT_FATAL(cg->comp()->target().is64Bit(), "StringLatin1.inflate only supported on 64-bit targets");
+    //TR_ASSERT_FATAL(cg->getSupportsInlineStringLatin1Inflate(), "Inlining of StringLatin1.inflate not supported");
+    TR_ASSERT_FATAL(!TR::Compiler->om.canGenerateArraylets(), "StringLatin1.inflate intrinsic is not supported with arraylets");
+    TR_ASSERT_FATAL_WITH_NODE(node, node->getNumChildren() == 5, "Wrong number of children in inlineStringLatin1Inflate");
+
+    TR::Compilation *comp = cg->comp();
+
+    TR::Register *inputAddressReg = cg->evaluate(node->getChild(0));
+    TR::Register *inputOffsetReg = cg->gprClobberEvaluate(node->getChild(1), OP::MOV4RegReg);
+    TR::Register *outputAddressReg = cg->evaluate(node->getChild(2));
+    TR::Register *outputOffsetReg = cg->gprClobberEvaluate(node->getChild(3), OP::MOV4RegReg);
+    TR::Register *resultReg = cg->gprClobberEvaluate(node->getChild(4), OP::MOV4RegReg);
+
+    TR::Register *remainingReg = cg->allocateRegister(TR_GPR);
+    TR::Register *tempReg = cg->allocateRegister(TR_GPR);
+
+    TR::LabelSymbol *startLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *workLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *loopLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *successLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
+
+    TR::LabelSymbol *lenXLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *diffXLabel = generateLabelSymbol(cg);
+
+    TR::LabelSymbol *lenLabels[64];
+    TR::LabelSymbol *diffLabels[32];
+
+    //TODO: can changes these
+    int32_t numLenChecks = 32; //max is 64
+    int32_t numDiffChecks = 32; //max is 32
+
+    for (int i = 0; i < numLenChecks; i++) {
+        lenLabels[i] = generateLabelSymbol(cg);
+    }
+
+    for (int i = 0; i < numDiffChecks; i++) {
+        diffLabels[i] = generateLabelSymbol(cg);
+    }
+
+    int maxDepCount = 7;
+    TR::RegisterDependencyConditions *deps = RegDeps(0, maxDepCount, cg);
+    deps->addPostCondition(inputAddressReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(inputOffsetReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(outputAddressReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(outputOffsetReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(resultReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(remainingReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(tempReg, TR::RealRegister::NoReg, cg);
+
+    intptr_t headerOffsetConst = TR::Compiler->om.contiguousArrayHeaderSizeInBytes();
+
+    cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressDebug/(%s)", comp->signature()));
+
+    Inst_Label(OP::label, node, startLabel, cg);
+    startLabel->setStartInternalControlFlow();
+
+    for (int32_t i = 0; i < numLenChecks; i++) {
+        Inst_RegImm(OP::CMP4RegImm4, node, resultReg, i, cg);
+        Inst_Label(OP::JE4, node, lenLabels[i], cg);
+    }
+    Inst_Label(OP::JMP4, node, lenXLabel, cg);
+
+    for (int32_t i = 0; i < numLenChecks; i++) {
+        Inst_Label(OP::label, node, lenLabels[i], cg);
+        cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressLen/%05d/(%s)", i, comp->signature()));
+        if (0 == i) {
+            Inst_Label(OP::JMP4, node, successLabel, cg);
+        } else {
+            Inst_Label(OP::JMP4, node, workLabel, cg);
+        }
+    }
+
+    Inst_Label(OP::label, node, lenXLabel, cg);
+    cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressLen/09999/(%s)", comp->signature()));
+
+    Inst_Label(OP::label, node, workLabel, cg);
+    Inst_RegReg(OP::MOV4RegReg, node, remainingReg, resultReg, cg);
+    Inst_RegReg(OP::ADD4RegReg, node, inputOffsetReg, inputOffsetReg, cg);
+
+    for (int32_t i = 0; i < numDiffChecks; i++) {
+        Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 0, headerOffsetConst, cg), cg);
+        Inst_MemReg(OP::S1MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), tempReg, cg);
+        Inst_RegImm(OP::AND4RegImm4, node, tempReg, 0x0000FF00, cg);
+        Inst_RegImm(OP::CMP4RegImm4, node, tempReg, 0, cg);
+        Inst_Label(OP::JNE4, node, diffLabels[i], cg);
+        Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -1, cg);
+        Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 0, cg);
+        Inst_Label(OP::JE4, node, successLabel, cg);
+        Inst_RegImm(OP::ADD4RegImm4, node, inputOffsetReg, 2, cg);
+        Inst_RegImm(OP::ADD4RegImm4, node, outputOffsetReg, 1, cg);
+    }
+
+    Inst_Label(OP::label, node, loopLabel, cg);
+    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 0, headerOffsetConst, cg), cg);
+    Inst_MemReg(OP::S1MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), tempReg, cg);
+    Inst_RegImm(OP::AND4RegImm4, node, tempReg, 0x0000FF00, cg);
+    Inst_RegImm(OP::CMP4RegImm4, node, tempReg, 0, cg);
+    Inst_Label(OP::JNE4, node, diffXLabel, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -1, cg);
+    Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 0, cg);
+    Inst_Label(OP::JE4, node, successLabel, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, inputOffsetReg, 2, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, outputOffsetReg, 1, cg);
+    Inst_Label(OP::JMP4, node, loopLabel, cg);
+
+    for (int32_t i = 0; i < numDiffChecks; i++) {
+        Inst_Label(OP::label, node, diffLabels[i], cg);
+        cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressDiffLoc/%05d/(%s)", i, comp->signature()));
+#if JAVA_SPEC_VERSION >= 21
+        Inst_RegReg(OP::SUB4RegReg, node, resultReg, remainingReg, cg);
+#else
+        Inst_RegImm(OP::MOV4RegImm4, node, resultReg, 0, cg);
+#endif
+        Inst_Label(OP::JMP4, node, doneLabel, cg);
+    }
+
+    Inst_Label(OP::label, node, diffXLabel, cg);
+    cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressDiffLoc/09999/(%s)", comp->signature()));
+#if JAVA_SPEC_VERSION >= 21
+    Inst_RegReg(OP::SUB4RegReg, node, resultReg, remainingReg, cg);
+#else
+    Inst_RegImm(OP::MOV4RegImm4, node, resultReg, 0, cg);
+#endif
+    Inst_Label(OP::JMP4, node, doneLabel, cg);
+
+    Inst_Label(OP::label, node, successLabel, cg);
+    cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressDiffLoc/99999/(%s)", comp->signature()));
+
+    deps->stopAddingConditions();
+    Inst_Label(OP::label, node, doneLabel, deps, cg);
+    doneLabel->setEndInternalControlFlow();
+
+    node->setRegister(resultReg);
+
+    cg->stopUsingRegister(inputAddressReg);
+    cg->stopUsingRegister(inputOffsetReg);
+    cg->stopUsingRegister(outputAddressReg);
+    cg->stopUsingRegister(outputOffsetReg);
+    cg->stopUsingRegister(remainingReg);
+    cg->stopUsingRegister(tempReg);
+
+    for (int32_t i = 0; i < node->getNumChildren(); i++) {
+        cg->decReferenceCount(node->getChild(i));
+    }
+
+    return resultReg;
+}
+
+TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, TR::CodeGenerator *cg)
+{
+    TR_ASSERT_FATAL(cg->comp()->target().is64Bit(), "StringUTF16.compress only supported on 64-bit targets");
+    //TR_ASSERT_FATAL(cg->getSupportsInlineStringLatin1Inflate(), "Inlining of StringLatin1.inflate not supported");
+    TR_ASSERT_FATAL(!TR::Compiler->om.canGenerateArraylets(), "StringUTF16.compress intrinsic is not supported with arraylets");
+    TR_ASSERT_FATAL_WITH_NODE(node, node->getNumChildren() == 5, "Wrong number of children in inlineStringLatin1Inflate");
+
+    TR::Compilation *comp = cg->comp();
+
+    TR::Register *inputAddressReg = cg->gprClobberEvaluate(node->getChild(0), OP::MOV8RegReg);
+    TR::Register *inputOffsetReg = cg->evaluate(node->getChild(1));
+    TR::Register *outputAddressReg = cg->gprClobberEvaluate(node->getChild(2), OP::MOV8RegReg);
+    TR::Register *outputOffsetReg = cg->gprClobberEvaluate(node->getChild(3), OP::MOV4RegReg);
+    TR::Register *resultReg = cg->gprClobberEvaluate(node->getChild(4), OP::MOV4RegReg);
+
+    TR::Register *remainingReg = cg->allocateRegister(TR_GPR);
+    TR::Register *tempReg = cg->allocateRegister(TR_GPR);
+
+    TR::Register *maskXmmReg = cg->allocateRegister(TR_VRF);
+    TR::Register *temp1XmmReg = cg->allocateRegister(TR_VRF);
+    TR::Register *temp2XmmReg = cg->allocateRegister(TR_VRF);
+
+    TR::LabelSymbol *startLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *load16ElementLoopLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *load8ElementLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *load4ElementLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *load1ElementLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *resultLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
+#if JAVA_SPEC_VERSION >= 21
+    TR::LabelSymbol *diffLabel = generateLabelSymbol(cg);
+#endif
+
+    int maxDepCount = 10;
+    TR::RegisterDependencyConditions *deps = RegDeps(0, maxDepCount, cg);
+    deps->addPostCondition(inputAddressReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(inputOffsetReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(outputAddressReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(outputOffsetReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(resultReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(remainingReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(tempReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(maskXmmReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(temp1XmmReg, TR::RealRegister::NoReg, cg);
+    deps->addPostCondition(temp2XmmReg, TR::RealRegister::NoReg, cg);
+
+    intptr_t headerOffsetConst = TR::Compiler->om.contiguousArrayHeaderSizeInBytes();
+
+    cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompress/(%s)", comp->signature()));
+
+    Inst_Label(OP::label, node, startLabel, cg);
+    startLabel->setStartInternalControlFlow();
+
+    Inst_RegImm(OP::CMP4RegImm4, node, resultReg, 0, cg);
+    Inst_Label(OP::JE4, node, doneLabel, cg);
+
+    Inst_RegReg(OP::MOV4RegReg, node, remainingReg, resultReg, cg);
+
+    TR::Node *inputOffsetNode = node->getChild(1);
+    if (!inputOffsetNode->isConstZeroValue()) {
+        Inst_RegMem(OP::LEA8RegMem, node, inputAddressReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 1, 0, cg), cg);
+    }
+
+    TR::Node *outputOffsetNode = node->getChild(3);
+    if (!outputOffsetNode->isConstZeroValue()) {
+        Inst_RegReg(OP::ADD8RegReg, node, outputAddressReg, outputOffsetReg, cg);
+        Inst_RegReg(OP::XOR8RegReg, node, outputOffsetReg, outputOffsetReg, cg);
+    }
+
+    Inst_RegImm(OP::CMP4RegImm4, node, resultReg, 4, cg);
+    Inst_Label(OP::JL4, node, load1ElementLabel, cg);
+
+    Inst_RegImm(OP::MOV4RegImm4, node, tempReg, 0xFF00FF00, cg);
+    Inst_RegReg(OP::MOVDRegReg4, node, maskXmmReg, tempReg, cg);
+    Inst_RegRegImm(OP::PSHUFDRegRegImm1, node, maskXmmReg, maskXmmReg, 0, cg);
+
+    Inst_RegImm(OP::CMP4RegImm4, node, resultReg, 8, cg);
+    Inst_Label(OP::JL4, node, load4ElementLabel, cg);
+
+    Inst_RegImm(OP::CMP4RegImm4, node, resultReg, 16, cg);
+    Inst_Label(OP::JL4, node, load8ElementLabel, cg);
+
+    Inst_Label(OP::label, node, load16ElementLoopLabel, cg);
+    Inst_RegMem(OP::MOVDQURegMem, node, temp1XmmReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
+    Inst_RegReg(OP::PTESTRegReg, node, temp1XmmReg, maskXmmReg, cg);
+#if JAVA_SPEC_VERSION >= 21
+    Inst_Label(OP::JNE4, node, diffLabel, cg); //TODO: vectorize the non-Latin1 path.
+#else
+    Inst_Label(OP::JNE4, node, resultLabel, cg);
+#endif
+
+    Inst_RegMem(OP::MOVDQURegMem, node, temp2XmmReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst+16, cg), cg);
+    Inst_RegReg(OP::PTESTRegReg, node, temp2XmmReg, maskXmmReg, cg);
+#if JAVA_SPEC_VERSION >= 21
+    Inst_Label(OP::JNE4, node, diffLabel, cg); //TODO: vectorize the non-Latin1 path.
+#else
+    Inst_Label(OP::JNE4, node, resultLabel, cg);
+#endif
+
+    Inst_RegReg(OP::PACKUSWBRegReg, node, temp1XmmReg, temp2XmmReg, cg);
+    Inst_MemReg(OP::MOVDQUMemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), temp1XmmReg, cg);
+
+    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -16, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, outputOffsetReg, 16, cg);
+
+    Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 16, cg);
+    Inst_Label(OP::JGE4, node, load16ElementLoopLabel, cg);
+
+    Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 0, cg);
+    Inst_Label(OP::JE4, node, doneLabel, cg);
+
+    Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 4, cg);
+    Inst_Label(OP::JL4, node, load1ElementLabel, cg);
+
+    Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 8, cg);
+    Inst_Label(OP::JL4, node, load4ElementLabel, cg);
+
+#if JAVA_SPEC_VERSION >= 21
+    Inst_Label(OP::JMP4, node, load8ElementLabel, cg);
+
+    //TODO: vectorize the non-Latin1 path
+    Inst_Label(OP::label, node, diffLabel, cg);
+    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
+    Inst_RegImm(OP::TEST2RegImm2, node, tempReg, 0xFF00, cg);
+    Inst_Label(OP::JNE4, node, resultLabel, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -1, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, outputOffsetReg, 1, cg);
+    Inst_Label(OP::JMP4, node, diffLabel, cg);
+#endif
+
+    Inst_Label(OP::label, node, load8ElementLabel, cg);
+    Inst_RegMem(OP::MOVDQURegMem, node, temp1XmmReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
+    Inst_RegReg(OP::PTESTRegReg, node, temp1XmmReg, maskXmmReg, cg);
+#if JAVA_SPEC_VERSION >= 21
+    Inst_Label(OP::JNE4, node, diffLabel, cg); //TODO: vectorize the non-Latin1 path.
+#else
+    Inst_Label(OP::JNE4, node, resultLabel, cg);
+#endif
+    Inst_RegReg(OP::PACKUSWBRegReg, node, temp1XmmReg, maskXmmReg, cg); //Only the lower 8 bytes hold meaningful data
+    Inst_MemReg(OP::MOVQMemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), temp1XmmReg, cg);
+
+    Inst_RegImm(OP::ADD4RegImm4, node, outputOffsetReg, 8, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -8, cg);
+    Inst_Label(OP::JE4, node, doneLabel, cg);
+
+    Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 4, cg);
+    Inst_Label(OP::JL4, node, load1ElementLabel, cg);
+
+    Inst_Label(OP::label, node, load4ElementLabel, cg);
+    Inst_RegMem(OP::L8RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
+    Inst_RegReg(OP::MOVQRegReg8, node, temp1XmmReg, tempReg, cg);
+    Inst_RegRegImm(OP::PSHUFDRegRegImm1, node, temp1XmmReg, temp1XmmReg, 4, cg);
+    Inst_RegReg(OP::PTESTRegReg, node, temp1XmmReg, maskXmmReg, cg);
+#if JAVA_SPEC_VERSION >= 21
+    Inst_Label(OP::JNE4, node, diffLabel, cg); //TODO: vectorize the non-Latin1 path.
+#else
+    Inst_Label(OP::JNE4, node, resultLabel, cg);
+#endif
+    Inst_RegReg(OP::PACKUSWBRegReg, node, temp1XmmReg, maskXmmReg, cg); //Only the lower 4 bytes hold meaningful data
+    Inst_RegReg(OP::MOVDReg4Reg, node, tempReg, temp1XmmReg, cg);
+    Inst_MemReg(OP::S4MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), tempReg, cg);
+
+    Inst_RegImm(OP::ADD4RegImm4, node, outputOffsetReg, 4, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -4, cg);
+    Inst_Label(OP::JE4, node, doneLabel, cg);
+
+    Inst_Label(OP::label, node, load1ElementLabel, cg);
+    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
+    Inst_RegImm(OP::TEST2RegImm2, node, tempReg, 0xFF00, cg);
+    Inst_Label(OP::JNE4, node, resultLabel, cg);
+    Inst_MemReg(OP::S1MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), tempReg, cg);
+    Inst_Reg(OP::DEC4Reg, node, remainingReg, cg);
+    Inst_Label(OP::JE4, node, doneLabel, cg);
+
+    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst + 2, cg), cg);
+    Inst_RegImm(OP::TEST2RegImm2, node, tempReg, 0xFF00, cg);
+    Inst_Label(OP::JNE4, node, resultLabel, cg);
+    Inst_MemReg(OP::S1MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst + 1, cg), tempReg, cg);
+    Inst_Reg(OP::DEC4Reg, node, remainingReg, cg);
+    Inst_Label(OP::JE4, node, doneLabel, cg);
+
+    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst + 4, cg), cg);
+    Inst_RegImm(OP::TEST2RegImm2, node, tempReg, 0xFF00, cg);
+    Inst_Label(OP::JNE4, node, resultLabel, cg);
+    Inst_MemReg(OP::S1MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst + 2, cg), tempReg, cg);
+#if JAVA_SPEC_VERSION >= 21
+    Inst_Reg(OP::DEC4Reg, node, remainingReg, cg);
+#else
+    Inst_Label(OP::JMP4, node, doneLabel, cg);
+#endif
+
+    Inst_Label(OP::label, node, resultLabel, cg);
+#if JAVA_SPEC_VERSION >= 21
+    Inst_RegReg(OP::SUB4RegReg, node, resultReg, remainingReg, cg);
+#else
+    Inst_RegImm(OP::MOV4RegImm4, node, resultReg, 0, cg);
+#endif
+
+    deps->stopAddingConditions();
+    Inst_Label(OP::label, node, doneLabel, deps, cg);
+    doneLabel->setEndInternalControlFlow();
+
+    node->setRegister(resultReg);
+
+    cg->stopUsingRegister(inputAddressReg);
+    cg->stopUsingRegister(inputOffsetReg);
+    cg->stopUsingRegister(outputAddressReg);
+    cg->stopUsingRegister(outputOffsetReg);
+    cg->stopUsingRegister(remainingReg);
+    cg->stopUsingRegister(tempReg);
+
+    cg->stopUsingRegister(maskXmmReg);
+    cg->stopUsingRegister(temp1XmmReg);
+    cg->stopUsingRegister(temp2XmmReg);
+
+    for (int32_t i = 0; i < node->getNumChildren(); i++) {
+        cg->decReferenceCount(node->getChild(i));
+    }
+
+    return resultReg;
 }
 
 TR::Register *J9::X86::TreeEvaluator::encodeUTF16Evaluator(TR::Node *node, TR::CodeGenerator *cg)

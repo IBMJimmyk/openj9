@@ -827,6 +827,59 @@ void J9::RecognizedCallTransformer::process_java_lang_StringCoding_encodeASCII(T
     cfg->removeEdge(fallthroughBlock, fallbackPathBlock);
 }
 
+void J9::RecognizedCallTransformer::process_java_lang_StringUTF16_compress_CIBII(TR::TreeTop *treetop, TR::Node *node)
+{
+    TR::Node *srcObjNode = node->getFirstChild();
+    TR::Node *srcOffNode = node->getSecondChild();
+    TR::Node *dstObjNode = node->getChild(2);
+    TR::Node *dstOffNode = node->getChild(3);
+    TR::Node *copyLenNode = node->getChild(4);
+
+    TR::Node *arrayTranslateNode = TR::Node::create(node, TR::arraytranslate, 6);
+    arrayTranslateNode->setSourceIsByteArrayTranslate(false);
+    arrayTranslateNode->setTargetIsByteArrayTranslate(true);
+    arrayTranslateNode->setTermCharNodeIsHint(false);
+    arrayTranslateNode->setSourceCellIsTermChar(false);
+    arrayTranslateNode->setTableBackedByRawStorage(true);
+    arrayTranslateNode->setSymbolReference(comp()->getSymRefTab()->findOrCreateArrayTranslateSymbol());
+
+    TR::Node *srcIndexOffsetNode = TR::TransformUtil::generateConvertArrayElementIndexToOffsetTrees(comp(), srcOffNode, NULL, 2, false);
+    TR::Node *srcAddrNode = TR::TransformUtil::generateArrayElementAddressTrees(comp(), srcObjNode, srcIndexOffsetNode);
+
+    TR::Node *dstIndexOffsetNode = TR::TransformUtil::generateConvertArrayElementIndexToOffsetTrees(comp(), dstOffNode, NULL, 1, false);
+    TR::Node *dstAddrNode = TR::TransformUtil::generateArrayElementAddressTrees(comp(), dstObjNode, dstIndexOffsetNode);
+
+    TR::Node *tableNode = TR::Node::create(node, TR::iconst, 0, 0); // dummy table node
+    TR::Node *termCharNode = TR::Node::create(node, TR::iconst, 0, 0xff00ff00); // mask for ISO 8859-1 decoder
+    TR::Node *stoppingNode = TR::Node::create(node, TR::iconst, 0, -1); // dummy stop index node
+
+    arrayTranslateNode->setAndIncChild(0, srcAddrNode);
+    arrayTranslateNode->setAndIncChild(1, dstAddrNode);
+    arrayTranslateNode->setAndIncChild(2, tableNode);
+    arrayTranslateNode->setAndIncChild(3, termCharNode);
+    arrayTranslateNode->setAndIncChild(4, copyLenNode);
+    arrayTranslateNode->setAndIncChild(5, stoppingNode);
+
+    // Mark arraytranslateNode as inlinedByCG as it is an intrinsic that should not be treated as a regular call by the
+    // inliner
+    arrayTranslateNode->getSymbolReference()->getSymbol()->castToMethodSymbol()->setIsInlinedByCG();
+
+    TR::DataType dataType = node->getDataType();
+    TR::SymbolReference *newSymbolReference = comp()->getSymRefTab()->createTemporary(comp()->getMethodSymbol(), dataType);
+
+    TR::Node::recreate(node, comp()->il.opCodeForDirectLoad(dataType));
+    node->setSymbolReference(newSymbolReference);
+    node->removeAllChildren();
+
+    TR::Node *storeNode = TR::Node::createWithSymRef(comp()->il.opCodeForDirectStore(dataType), 1, 1, arrayTranslateNode, newSymbolReference);
+    TR::TreeTop *storeTreeTop = TR::TreeTop::create(comp(), storeNode);
+    treetop->insertAfter(storeTreeTop);
+
+    TR::TransformUtil::removeTree(comp(), treetop);
+
+    TR::DebugCounter::prependDebugCounter(comp(), TR::DebugCounter::debugCounterName(comp(), "treesIntrinsicUTF16Compress/(%s)", comp()->signature()), storeTreeTop);
+}
+
 void J9::RecognizedCallTransformer::process_java_lang_StringLatin1_compareTo_BBII(TR::TreeTop *treetop, TR::Node *node)
 {
     /*
@@ -2698,6 +2751,7 @@ bool J9::RecognizedCallTransformer::isInlineable(TR::TreeTop *treetop)
     auto node = treetop->getNode()->getFirstChild();
     TR::RecognizedMethod rm = node->getSymbol()->castToMethodSymbol()->getMandatoryRecognizedMethod();
 
+    static const bool enableStringUTF16CompressTransform = (feGetEnv("TR_EnableStringUTF16CompressTransform") != NULL);
     bool isILGenPass = !getLastRun();
     static const bool disableStringIntrinsicBoundChk = (feGetEnv("TR_DisableStringIntrinsicBoundChk") != NULL);
     if (isILGenPass) {
@@ -2801,6 +2855,9 @@ bool J9::RecognizedCallTransformer::isInlineable(TR::TreeTop *treetop)
                 return (!disableStringIntrinsicBoundChk && cg()->getSupportsInlineStringIndexOfString()
                     && !node->isSafeForCGToInlineStringIntrinsic() && !node->isSkippedInRecognizedCallTransformation());
 #endif /* JAVA_SPEC_VERSION < 25 */
+            case TR::java_lang_StringUTF16_compress_CIBII:
+                //return (cg()->getSupportsArrayTranslateTRTO255()); //TODO: figure out support restrictions
+                return enableStringUTF16CompressTransform;
             case TR::jdk_internal_util_ArraysSupport_vectorizedMismatch:
                 return cg()->getSupportsInlineVectorizedMismatch();
 #if JAVA_SPEC_VERSION >= 21
@@ -2869,6 +2926,8 @@ void J9::RecognizedCallTransformer::transform(TR::TreeTop *treetop)
 {
     auto node = treetop->getNode()->getFirstChild();
     TR::RecognizedMethod rm = node->getSymbol()->castToMethodSymbol()->getMandatoryRecognizedMethod();
+
+    static const bool enableStringUTF16CompressTransform = (feGetEnv("TR_EnableStringUTF16CompressTransform") != NULL);
 
     bool isILGenPass = !getLastRun();
     if (isILGenPass) {
@@ -2988,6 +3047,13 @@ void J9::RecognizedCallTransformer::transform(TR::TreeTop *treetop)
                 process_java_lang_StringLatin1_indexOf_BIBII(treetop, node, true /* isLatin1 */);
                 break;
 #endif /* JAVA_SPEC_VERSION < 25 */
+            case TR::java_lang_StringUTF16_compress_CIBII:
+                if (enableStringUTF16CompressTransform) {
+                    process_java_lang_StringUTF16_compress_CIBII(treetop, node);
+                } else {
+                  TR_ASSERT_FATAL(false, "enableStringUTF16CompressTransform is not set");
+                }
+                break;
             case TR::java_lang_StrictMath_sqrt:
             case TR::java_lang_Math_sqrt:
                 process_java_lang_StrictMath_and_Math_sqrt(treetop, node);
