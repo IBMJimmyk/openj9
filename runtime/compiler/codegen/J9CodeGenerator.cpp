@@ -612,7 +612,7 @@ void J9::CodeGenerator::lowerTreesPreChildrenVisit(TR::Node *parent, TR::TreeTop
                         && !disableCAEIntrinsic))
                 && methodSymbol->isNative()
                 && (!TR::Compiler->om.canGenerateArraylets() || parent->isUnsafeGetPutCASCallOnNonArray())
-                && parent->isSafeForCGToFastPathUnsafeCall()) {
+                && parent->isSafeForCGToFastPathCall()) {
                 TR_BitVector childrenToBeLowered(parent->getNumChildren(), self()->comp()->trMemory(), stackAlloc);
                 childrenToBeLowered.set(3);
                 childrenToBeLowered.set(4);

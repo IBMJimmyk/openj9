@@ -7589,7 +7589,7 @@ bool J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
 
             case TR::java_lang_StringLatin1_indexOf:
 #if JAVA_SPEC_VERSION < 25
-                if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToInlineStringIntrinsic()) {
+                if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToFastPathCall()) {
                     break;
                 }
                 /* Intentional fallthrough. */
@@ -7603,7 +7603,7 @@ bool J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
 
             case TR::java_lang_StringUTF16_indexOf:
 #if JAVA_SPEC_VERSION < 25
-                if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToInlineStringIntrinsic()) {
+                if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToFastPathCall()) {
                     break;
                 }
                 /* Intentional fallthrough. */
@@ -7720,7 +7720,7 @@ bool J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
             case TR::java_lang_StringLatin1_inflate_BICII:
                 if (cg->getSupportsInlineStringLatin1Inflate()) {
 #if JAVA_SPEC_VERSION < 25
-                    if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToInlineStringIntrinsic()) {
+                    if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToFastPathCall()) {
                         break;
                     }
 #endif /* JAVA_SPEC_VERSION < 25 */
@@ -7737,7 +7737,7 @@ bool J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
                     break;
 
                 if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets())
-                    && node->isSafeForCGToFastPathUnsafeCall()) {
+                    && node->isSafeForCGToFastPathCall()) {
                     if (!disableCASInlining) {
                         resultReg = VMinlineCompareAndSwap(node, cg, false);
                         return true;
@@ -7765,7 +7765,7 @@ bool J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
                     break;
 
                 if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets())
-                    && node->isSafeForCGToFastPathUnsafeCall()) {
+                    && node->isSafeForCGToFastPathCall()) {
                     if (!disableCASInlining) {
                         resultReg = VMinlineCompareAndSwap(node, cg, true);
                         return true;
@@ -7779,7 +7779,7 @@ bool J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
                     break;
 
                 if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets())
-                    && node->isSafeForCGToFastPathUnsafeCall()) {
+                    && node->isSafeForCGToFastPathCall()) {
                     if (!disableCASInlining) {
                         resultReg = VMinlineCompareAndSwapObject(node, cg);
                         return true;
@@ -7790,7 +7790,7 @@ bool J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
 
             case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt: {
                 if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets())
-                    && node->isSafeForCGToFastPathUnsafeCall()) {
+                    && node->isSafeForCGToFastPathCall()) {
                     if (!disableCAEInlining) {
                         resultReg = VMinlineCompareAndSwap(node, cg, false, true);
                         return true;
@@ -7801,7 +7801,7 @@ bool J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
 
             case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong: {
                 if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets())
-                    && node->isSafeForCGToFastPathUnsafeCall()) {
+                    && node->isSafeForCGToFastPathCall()) {
                     if (!disableCAEInlining) {
                         resultReg = VMinlineCompareAndSwap(node, cg, true, true);
                         return true;
@@ -7821,7 +7821,7 @@ bool J9::ARM64::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
             /* If native, fall through. */
             case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference: {
                 if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets())
-                    && node->isSafeForCGToFastPathUnsafeCall()) {
+                    && node->isSafeForCGToFastPathCall()) {
                     if (!disableCAEInlining) {
                         resultReg = VMinlineCompareAndSwapObject(node, cg, true);
                         return true;

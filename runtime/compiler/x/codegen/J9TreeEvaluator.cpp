@@ -11572,16 +11572,16 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(TR::Node *node, bool isIndire
                 }
                 return false; // Call the native version of NativeThread.current()
             case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z: {
-                if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
+                if (!disableCASInlining && node->isSafeForCGToFastPathCall())
                     return inlineCompareAndSwapNative(node, 4, false, false, cg);
             } break;
             case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z: {
-                if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
+                if (!disableCASInlining && node->isSafeForCGToFastPathCall())
                     return inlineCompareAndSwapNative(node, 8, false, false, cg);
             } break;
             case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z: {
                 static bool useOldCompareAndSwapObject = (bool)feGetEnv("TR_UseOldCompareAndSwapObject");
-                if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall()) {
+                if (!disableCASInlining && node->isSafeForCGToFastPathCall()) {
                     if (useOldCompareAndSwapObject)
                         return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, false,
                             cg);
@@ -11592,17 +11592,17 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(TR::Node *node, bool isIndire
                 }
             } break;
             case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt: {
-                if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
+                if (!disableCAEInlining && node->isSafeForCGToFastPathCall())
                     return inlineCompareAndSwapNative(node, 4, false, true, cg);
             } break;
             case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong: {
-                if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
+                if (!disableCAEInlining && node->isSafeForCGToFastPathCall())
                     return inlineCompareAndSwapNative(node, 8, false, true, cg);
             } break;
             case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
             case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference: {
                 static bool useOldCompareAndSwapObject = (bool)feGetEnv("TR_UseOldCompareAndSwapObject");
-                if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall()) {
+                if (!disableCAEInlining && node->isSafeForCGToFastPathCall()) {
                     if (useOldCompareAndSwapObject)
                         return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, true,
                             cg);
@@ -12950,7 +12950,7 @@ TR::Register *J9::X86::TreeEvaluator::directCallEvaluator(TR::Node *node, TR::Co
 
         case TR::java_lang_StringLatin1_indexOf:
 #if JAVA_SPEC_VERSION < 25
-            if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToInlineStringIntrinsic()) {
+            if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToFastPathCall()) {
                 break;
             }
             /* Intentional fallthrough. */
@@ -12964,7 +12964,7 @@ TR::Register *J9::X86::TreeEvaluator::directCallEvaluator(TR::Node *node, TR::Co
 
         case TR::java_lang_StringUTF16_indexOf:
 #if JAVA_SPEC_VERSION < 25
-            if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToInlineStringIntrinsic()) {
+            if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToFastPathCall()) {
                 break;
             }
             /* Intentional fallthrough. */
@@ -13083,7 +13083,7 @@ TR::Register *J9::X86::TreeEvaluator::directCallEvaluator(TR::Node *node, TR::Co
         case TR::java_lang_StringLatin1_inflate_BICII:
             if (cg->getSupportsInlineStringLatin1Inflate()) {
 #if JAVA_SPEC_VERSION < 25
-                if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToInlineStringIntrinsic()) {
+                if (!disableStringIntrinsicFlagChk && !node->isSafeForCGToFastPathCall()) {
                     break;
                 }
 #endif /* JAVA_SPEC_VERSION < 25 */

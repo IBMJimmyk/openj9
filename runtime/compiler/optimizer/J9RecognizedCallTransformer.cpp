@@ -965,10 +965,10 @@ void J9::RecognizedCallTransformer::process_java_lang_StringLatin1_inflate_BICII
      * The fast path has the inlineStringIntrinsic flag set so that it gets transformed by inlineDirectCall.
      */
     TR::TreeTop *slowPathTreeTop = TR::TreeTop::create(comp(), treetop->getNode()->duplicateTree());
-    slowPathTreeTop->getNode()->getFirstChild()->setSkipRecognizedCallTransformation(true);
+    slowPathTreeTop->getNode()->getFirstChild()->setSkippedInRecognizedCallTransformation(true);
 
     TR::TreeTop *fastPathTreeTop = TR::TreeTop::create(comp(), treetop->getNode()->duplicateTree());
-    fastPathTreeTop->getNode()->getFirstChild()->setIsSafeForCGToInlineStringIntrinsic(true);
+    fastPathTreeTop->getNode()->getFirstChild()->setSafeForCGToFastPathCall(true);
 
     /*
      * Put down the following two checks to confirm that src and dst arrays are big enough:
@@ -1073,10 +1073,10 @@ void J9::RecognizedCallTransformer::process_java_lang_StringLatin1_indexOf_BIBII
      * The fast path has the inlineStringIntrinsic flag set so that it gets transformed by inlineDirectCall.
      */
     TR::TreeTop *slowPathTreeTop = TR::TreeTop::create(comp(), treetop->getNode()->duplicateTree());
-    slowPathTreeTop->getNode()->getFirstChild()->setSkipRecognizedCallTransformation(true);
+    slowPathTreeTop->getNode()->getFirstChild()->setSkippedInRecognizedCallTransformation(true);
 
     TR::TreeTop *fastPathTreeTop = TR::TreeTop::create(comp(), treetop->getNode()->duplicateTree());
-    fastPathTreeTop->getNode()->getFirstChild()->setIsSafeForCGToInlineStringIntrinsic(true);
+    fastPathTreeTop->getNode()->getFirstChild()->setSafeForCGToFastPathCall(true);
 
     TR::SymbolReference *newSymbolReference = NULL;
     TR::DataType dataType = node->getDataType();
@@ -2769,7 +2769,7 @@ bool J9::RecognizedCallTransformer::isInlineable(TR::TreeTop *treetop)
             case TR::java_lang_StringLatin1_inflate_BIBII:
 #if JAVA_SPEC_VERSION < 25
                 if (!disableStringIntrinsicFlagChk && cg()->getSupportsInlineStringLatin1Inflate()
-                    && !node->isSafeForCGToInlineStringIntrinsic() && !node->checkSkipRecognizedCallTransformation()
+                    && !node->isSafeForCGToFastPathCall() && !node->isSkippedInRecognizedCallTransformation()
                     && comp()->target().cpu.isZ()) {
                     return true;
                 }
@@ -2778,7 +2778,7 @@ bool J9::RecognizedCallTransformer::isInlineable(TR::TreeTop *treetop)
 #if JAVA_SPEC_VERSION < 25
             case TR::java_lang_StringLatin1_inflate_BICII:
                 return (!disableStringIntrinsicFlagChk && cg()->getSupportsInlineStringLatin1Inflate()
-                    && !node->isSafeForCGToInlineStringIntrinsic() && !node->checkSkipRecognizedCallTransformation());
+                    && !node->isSafeForCGToFastPathCall() && !node->isSkippedInRecognizedCallTransformation());
             case TR::java_lang_StringUTF16_indexOf:
                 if (comp()->target().cpu.isPower()) {
                     return false;
@@ -2786,7 +2786,7 @@ bool J9::RecognizedCallTransformer::isInlineable(TR::TreeTop *treetop)
                 /* Intentional fallthrough. */
             case TR::java_lang_StringLatin1_indexOf:
                 return (!disableStringIntrinsicFlagChk && cg()->getSupportsInlineStringIndexOfString()
-                    && !node->isSafeForCGToInlineStringIntrinsic() && !node->checkSkipRecognizedCallTransformation());
+                    && !node->isSafeForCGToFastPathCall() && !node->isSkippedInRecognizedCallTransformation());
 #endif /* JAVA_SPEC_VERSION < 25 */
             case TR::jdk_internal_util_ArraysSupport_vectorizedMismatch:
                 return cg()->getSupportsInlineVectorizedMismatch();

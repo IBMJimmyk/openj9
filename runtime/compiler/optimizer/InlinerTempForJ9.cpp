@@ -1763,7 +1763,7 @@ bool TR_J9InlinerPolicy::createUnsafeCASCallDiamond(TR::TreeTop *callNodeTreeTop
         objBaseAddrNode->decReferenceCount();
         dataAddrNode->incReferenceCount();
 
-        CASicallNode->setIsSafeForCGToFastPathUnsafeCall(true);
+        CASicallNode->setSafeForCGToFastPathCall(true);
 
         // create NULL test treetop
         TR::Node *objAddr = callNodeTreeTop->getNode()->getChild(0)->getChild(1)->duplicateTree();
@@ -1775,7 +1775,7 @@ bool TR_J9InlinerPolicy::createUnsafeCASCallDiamond(TR::TreeTop *callNodeTreeTop
 
     // default access tree (non-array, non-lowtagged)
     TR::TreeTop *defaultAccessTreeTop = TR::TreeTop::create(comp(), callNodeTreeTop->getNode()->duplicateTree());
-    defaultAccessTreeTop->getNode()->getFirstChild()->setIsSafeForCGToFastPathUnsafeCall(true);
+    defaultAccessTreeTop->getNode()->getFirstChild()->setSafeForCGToFastPathCall(true);
     defaultAccessTreeTop->getNode()->getFirstChild()->setVisitCount(_inliner->getVisitCount());
 
     debugTrace(tracer(), "defaultAccessTreeTop = %p", defaultAccessTreeTop->getNode());
@@ -2683,7 +2683,7 @@ bool TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol
         case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
         case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
         case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-            if (disableCAEInlining || callNode->isSafeForCGToFastPathUnsafeCall()) {
+            if (disableCAEInlining || callNode->isSafeForCGToFastPathCall()) {
                 return false;
             }
             return createUnsafeCASCallDiamond(callNodeTreeTop, callNode);
@@ -2691,7 +2691,7 @@ bool TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol
         case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
         case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
         case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
-            if (disableCASInlining || callNode->isSafeForCGToFastPathUnsafeCall()) {
+            if (disableCASInlining || callNode->isSafeForCGToFastPathCall()) {
                 return false;
             }
 #if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
@@ -2715,7 +2715,7 @@ bool TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol
                 case TR::com_ibm_jit_JITHelpers_compareAndSwapIntInArray:
                 case TR::com_ibm_jit_JITHelpers_compareAndSwapLongInArray:
                 case TR::com_ibm_jit_JITHelpers_compareAndSwapObjectInArray:
-                    callNode->setIsSafeForCGToFastPathUnsafeCall(true);
+                    callNode->setSafeForCGToFastPathCall(true);
                     return callNode;
                 default:
                     return createUnsafeCASCallDiamond(callNodeTreeTop, callNode);

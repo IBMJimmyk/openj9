@@ -306,7 +306,7 @@ bool TR_UnsafeFastPath::tryTransformUnsafeAtomicCallInVarHandleAccessMethod(TR::
             }
 #endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
 
-            node->setIsSafeForCGToFastPathUnsafeCall(true);
+            node->setSafeForCGToFastPathCall(true);
             if (!isVarHandleOperationMethodOnArray(callerMethod)) {
                 node->setUnsafeGetPutCASCallOnNonArray(comp());
             }
