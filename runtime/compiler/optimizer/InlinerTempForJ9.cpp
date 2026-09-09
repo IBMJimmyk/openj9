@@ -5224,6 +5224,8 @@ bool TR_J9InlinerPolicy::suppressInliningRecognizedInitialCallee(TR_CallSite *ca
     if (initialCalleeMethod == NULL)
         return false;
 
+    static const bool enableStringUTF16CompressCodegenOpt = (feGetEnv("TR_EnableStringUTF16CompressCodegenOpt") != NULL);
+
     // Methods we may prefer not to inline, for heuristic reasons.
     // (Methods we must not inline for correctness don't go in the next switch below.)
     //
@@ -5479,6 +5481,11 @@ bool TR_J9InlinerPolicy::suppressInliningRecognizedInitialCallee(TR_CallSite *ca
         case TR::java_lang_StringLatin1_inflate_BIBII:
             if ((!comp->target().cpu.isPower())
                 && (cg->getSupportsArrayTranslateTROTNoBreak() || cg->getSupportsInlineStringLatin1Inflate())) {
+                return true;
+            }
+            break;
+        case TR::java_lang_StringUTF16_compress_CIBII:
+            if (comp->target().cpu.isPower() && enableStringUTF16CompressCodegenOpt) {
                 return true;
             }
             break;
