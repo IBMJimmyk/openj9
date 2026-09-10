@@ -144,6 +144,7 @@ private:
      */
     void process_java_lang_StringCoding_encodeASCII(TR::TreeTop *treetop, TR::Node *node);
 
+    void process_java_lang_StringUTF16_compress_CIBII_codegen(TR::TreeTop *treetop, TR::Node *node);
     void process_java_lang_StringUTF16_compress_CIBII(TR::TreeTop *treetop, TR::Node *node);
     /** \brief
      *     Transforms java/lang/StringLatin1.compareTo([B[BII)I using arraycmplen

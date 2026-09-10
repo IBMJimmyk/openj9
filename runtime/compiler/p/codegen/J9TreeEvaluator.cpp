@@ -15003,7 +15003,7 @@ bool J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
                 break;
 
             case TR::java_lang_StringUTF16_compress_CIBII:
-                if (enableStringUTF16CompressCodegenOpt) {
+                if (enableStringUTF16CompressCodegenOpt && node->isSafeForCGToInlineStringIntrinsic()) {
                     resultReg = inlineIntrinsicCompress(node, cg);
                     return (resultReg != nullptr);
                 }
