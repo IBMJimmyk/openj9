@@ -13674,15 +13674,16 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 
     TR::LabelSymbol *startLabel = generateLabelSymbol(cg);
     TR::LabelSymbol *load16ElementLoopLabel = generateLabelSymbol(cg);
-    //TR::LabelSymbol *vectorDiff16Label = generateLabelSymbol(cg);
-    //TR::LabelSymbol *vectorDiff8Label = generateLabelSymbol(cg);
-    //TR::LabelSymbol *vectorDiff4Label = generateLabelSymbol(cg);
-    TR::LabelSymbol *diffLabel = generateLabelSymbol(cg);
     TR::LabelSymbol *load8ElementLabel = generateLabelSymbol(cg);
     TR::LabelSymbol *load4ElementLabel = generateLabelSymbol(cg);
     TR::LabelSymbol *load1ElementLabel = generateLabelSymbol(cg);
     TR::LabelSymbol *resultLabel = generateLabelSymbol(cg);
     TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
+#if JAVA_SPEC_VERSION >= 21
+    TR::LabelSymbol *vectorDiff16Label = generateLabelSymbol(cg);
+    TR::LabelSymbol *vectorDiff8Label = generateLabelSymbol(cg);
+    TR::LabelSymbol *vectorDiff4Label = generateLabelSymbol(cg);
+#endif
 
     //TODO: verify dependencies, exclude GPR0
     int32_t numRegs = 14; //6 GPR, 6 VRF, 2 CCR
@@ -13801,7 +13802,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 
     generateTrg1Src3Instruction(cg, TR::InstOpCode::vperm, node, vec3Reg, vec1Reg, vec2Reg, permVecReg);
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpequb_r, node, vec3Reg, vec3Reg, constZeroVecReg);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, diffLabel, cr6Reg);
+#if JAVA_SPEC_VERSION >= 21
+    generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, vectorDiff16Label, cr6Reg);
+#else
+    generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, resultLabel, cr6Reg);
+#endif
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec3Reg, vec1Reg, vec2Reg);
 
     if (isAtLeastP9) {
@@ -13827,20 +13832,10 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     /* If 4-7 bytes remain, first jump to load4Label to handle the first 4 bytes. */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
     generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
+#if JAVA_SPEC_VERSION >= 21
     generateLabelInstruction(cg, TR::InstOpCode::b, node, load8ElementLabel);
 
-    generateLabelInstruction(cg, TR::InstOpCode::label, node, diffLabel);
-
-    generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg, TR::MemoryReference::createWithDisplacement(cg, inputAddressReg, 0, 2));
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::andi_r, node, temp2Reg, tempReg, 0xFF00);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
-    generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node, TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 0, 1), tempReg);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, inputAddressReg, inputAddressReg, 2);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, outputAddressReg, outputAddressReg, 1);
-    generateLabelInstruction(cg, TR::InstOpCode::b, node, diffLabel);
-
-    /*generateLabelInstruction(cg, TR::InstOpCode::label, node, vectorDiff16Label);
+    generateLabelInstruction(cg, TR::InstOpCode::label, node, vectorDiff16Label);
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vnor, node, vec3Reg, vec3Reg, vec3Reg);
     generateTrg1Src1Instruction(cg, TR::InstOpCode::vclzd, node, vec3Reg, vec3Reg);
     generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrd, node, tempReg, vec3Reg);
@@ -13874,13 +13869,18 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrd, node, tempReg, vec2Reg);
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::sradi, node, tempReg, tempReg, 4);
     generateTrg1Src2Instruction(cg, TR::InstOpCode::subf, node, remainingReg, tempReg, remainingReg);
-    generateLabelInstruction(cg, TR::InstOpCode::b, node, resultLabel);*/
+    generateLabelInstruction(cg, TR::InstOpCode::b, node, resultLabel);
+#endif
 
     generateLabelInstruction(cg, TR::InstOpCode::label, node, load8ElementLabel);
     generateTrg1MemInstruction(cg, TR::InstOpCode::lxvh8x, node, vec1Reg, TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 16));
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vand, node, vec2Reg, vec1Reg, maskVecReg);
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpequh_r, node, vec2Reg, vec2Reg, constZeroVecReg);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, diffLabel, cr6Reg);
+#if JAVA_SPEC_VERSION >= 21
+    generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, vectorDiff8Label, cr6Reg);
+#else
+    generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, resultLabel, cr6Reg);
+#endif
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec1Reg, vec2Reg);
     generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrd, node, tempReg, vec2Reg);
     generateMemSrc1Instruction(cg, TR::InstOpCode::stdbrx, node, TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 8), tempReg);
@@ -13902,7 +13902,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vrlh, node, vec1Reg, vec1Reg, vec2Reg);
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vand, node, vec2Reg, vec1Reg, maskVecReg);
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpequh_r, node, vec2Reg, vec2Reg, constZeroVecReg);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, diffLabel, cr6Reg);
+#if JAVA_SPEC_VERSION >= 21
+    generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, vectorDiff4Label, cr6Reg);
+#else
+    generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, resultLabel, cr6Reg);
+#endif
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec1Reg, vec1Reg);
     generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrwz, node, tempReg, vec2Reg);
     generateMemSrc1Instruction(cg, TR::InstOpCode::stwbrx, node, TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 4), tempReg);
