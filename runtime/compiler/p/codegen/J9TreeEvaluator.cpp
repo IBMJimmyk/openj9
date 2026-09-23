@@ -13975,6 +13975,195 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     return resultReg;
 }
 
+static TR::Register *inlineIntrinsicCompress_Counters(TR::Node *node, TR::CodeGenerator *cg)
+{
+    TR::Compilation *comp = cg->comp();
+
+    TR::Register *inputAddressReg = cg->gprClobberEvaluate(node->getChild(0));
+    TR::Register *inputOffsetReg = cg->gprClobberEvaluate(node->getChild(1));
+    TR::Register *outputAddressReg = cg->gprClobberEvaluate(node->getChild(2));
+    TR::Register *outputOffsetReg = cg->gprClobberEvaluate(node->getChild(3));
+    TR::Register *resultReg = cg->gprClobberEvaluate(node->getChild(4));
+
+    TR::Register *tempReg = inputOffsetReg;
+    TR::Register *temp2Reg = outputOffsetReg;
+    TR::Register *remainingReg = cg->allocateRegister();
+
+    TR::Register *cr0Reg = cg->allocateRegister(TR_CCR);
+
+    TR::LabelSymbol *startLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *workLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *loopLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *successLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
+
+    TR::LabelSymbol *lenXLabel = generateLabelSymbol(cg);
+    TR::LabelSymbol *diffXLabel = generateLabelSymbol(cg);
+
+    TR::LabelSymbol *lenLabels[64];
+    TR::LabelSymbol *diffLabels[32];
+
+    //TODO: can changes these
+    int32_t numLenChecks = 64; //max is 64
+    int32_t numDiffChecks = 8; //max is 32
+
+    for (int i = 0; i < numLenChecks; i++) {
+         lenLabels[i] = generateLabelSymbol(cg);
+    }
+
+    for (int i = 0; i < numDiffChecks; i++) {
+         diffLabels[i] = generateLabelSymbol(cg);
+    }
+
+    int32_t numRegs = 7; //6 GPR, 1 CCR
+    TR::RegisterDependencyConditions *deps = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(0, numRegs, cg->trMemory());
+    deps->addPostCondition(inputAddressReg, TR::RealRegister::NoReg);
+    deps->getPostConditions()->getRegisterDependency(deps->getAddCursorForPost() - 1)->setExcludeGPR0();
+    deps->addPostCondition(inputOffsetReg, TR::RealRegister::NoReg);
+    deps->getPostConditions()->getRegisterDependency(deps->getAddCursorForPost() - 1)->setExcludeGPR0();
+    deps->addPostCondition(outputAddressReg, TR::RealRegister::NoReg);
+    deps->getPostConditions()->getRegisterDependency(deps->getAddCursorForPost() - 1)->setExcludeGPR0();
+    deps->addPostCondition(outputOffsetReg, TR::RealRegister::NoReg);
+    deps->getPostConditions()->getRegisterDependency(deps->getAddCursorForPost() - 1)->setExcludeGPR0();
+    deps->addPostCondition(resultReg, TR::RealRegister::NoReg);
+    deps->getPostConditions()->getRegisterDependency(deps->getAddCursorForPost() - 1)->setExcludeGPR0();
+    deps->addPostCondition(remainingReg, TR::RealRegister::NoReg);
+    deps->getPostConditions()->getRegisterDependency(deps->getAddCursorForPost() - 1)->setExcludeGPR0();
+
+    deps->addPostCondition(cr0Reg, TR::RealRegister::cr0);
+
+    cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressDebug/(%s)", comp->signature()));
+
+    generateLabelInstruction(cg, TR::InstOpCode::label, node, startLabel);
+    startLabel->setStartInternalControlFlow();
+
+    for (int32_t i = 0; i < numLenChecks; i++) {
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, resultReg, i);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, lenLabels[i], cr0Reg);
+    }
+    generateLabelInstruction(cg, TR::InstOpCode::b, node, lenXLabel);
+
+    for (int32_t i = 0; i < numLenChecks; i++) {
+        generateLabelInstruction(cg, TR::InstOpCode::label, node, lenLabels[i]);
+        cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressLen/%05d/(%s)", i, comp->signature()));
+        if (0 == i) {
+            generateLabelInstruction(cg, TR::InstOpCode::b, node, successLabel);
+        } else {
+            generateLabelInstruction(cg, TR::InstOpCode::b, node, workLabel);
+        }
+    }
+
+    generateLabelInstruction(cg, TR::InstOpCode::label, node, lenXLabel);
+    cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressLen/09999/(%s)", comp->signature()));
+
+    generateLabelInstruction(cg, TR::InstOpCode::label, node, workLabel);
+
+    generateTrg1Src2Instruction(cg, TR::InstOpCode::OR, node, remainingReg, resultReg, resultReg);
+
+    // IMPORTANT: The upper 32 bits of a 64-bit register containing an int are undefined. Since the
+    // indices are being passed in as ints, we must ensure that their upper 32 bits are not garbage.
+    generateTrg1Src1Instruction(cg, TR::InstOpCode::extsw, node, inputOffsetReg, inputOffsetReg);
+    generateTrg1Src1Instruction(cg, TR::InstOpCode::extsw, node, outputOffsetReg, outputOffsetReg);
+
+    /*
+     * Determine the address of the first byte to read either by loading from dataAddr or adding the header size.
+     * This is followed by adding in the offset.
+     */
+#if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
+    if (TR::Compiler->om.isOffHeapAllocationEnabled()) {
+        generateTrg1MemInstruction(cg, TR::InstOpCode::ld, node, inputAddressReg,
+            TR::MemoryReference::createWithDisplacement(cg, inputAddressReg,
+                TR::Compiler->om.offsetOfContiguousDataAddrField(), 8));
+    } else
+#endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
+    {
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, inputAddressReg, inputAddressReg,
+            TR::Compiler->om.contiguousArrayHeaderSizeInBytes());
+    }
+
+    generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, inputAddressReg, inputAddressReg, inputOffsetReg);
+    generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, inputAddressReg, inputAddressReg, inputOffsetReg);
+
+    /*
+     * Determine the address of the first char to store either by loading from dataAddr or adding the header size.
+     * This is followed by adding in the offset twice due to being char data.
+     */
+#if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
+    if (TR::Compiler->om.isOffHeapAllocationEnabled()) {
+        generateTrg1MemInstruction(cg, TR::InstOpCode::ld, node, outputAddressReg,
+            TR::MemoryReference::createWithDisplacement(cg, outputAddressReg,
+                TR::Compiler->om.offsetOfContiguousDataAddrField(), 8));
+    } else
+#endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
+    {
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, outputAddressReg, outputAddressReg,
+            TR::Compiler->om.contiguousArrayHeaderSizeInBytes());
+    }
+
+    generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, outputAddressReg, outputAddressReg, outputOffsetReg);
+
+    for (int32_t i = 0; i < numDiffChecks; i++) {
+        generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg, TR::MemoryReference::createWithDisplacement(cg, inputAddressReg, 0, 2));
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::andi_r, node, temp2Reg, tempReg, 0xFF00);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, diffLabels[i], cr0Reg);
+        generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node, TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 0, 1), tempReg);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, successLabel, cr0Reg);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, inputAddressReg, inputAddressReg, 2);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, outputAddressReg, outputAddressReg, 1);
+    }
+
+    generateLabelInstruction(cg, TR::InstOpCode::label, node, loopLabel);
+    generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg, TR::MemoryReference::createWithDisplacement(cg, inputAddressReg, 0, 2));
+    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::andi_r, node, temp2Reg, tempReg, 0xFF00);
+    generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, diffXLabel, cr0Reg);
+    generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node, TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 0, 1), tempReg);
+    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
+    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
+    generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, successLabel, cr0Reg);
+    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, inputAddressReg, inputAddressReg, 2);
+    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, outputAddressReg, outputAddressReg, 1);
+    generateLabelInstruction(cg, TR::InstOpCode::b, node, loopLabel);
+
+    for (int32_t i = 0; i < numDiffChecks; i++) {
+        generateLabelInstruction(cg, TR::InstOpCode::label, node, diffLabels[i]);
+        cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressDiffLoc/%05d/(%s)", i, comp->signature()));
+#if JAVA_SPEC_VERSION >= 21
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::subf, node, resultReg, remainingReg, resultReg);
+#else
+        generateTrg1ImmInstruction(cg, TR::InstOpCode::li, node, resultReg, 0);
+#endif /* JAVA_SPEC_VERSION >= 21 */
+        generateLabelInstruction(cg, TR::InstOpCode::b, node, doneLabel);
+    }
+
+    generateLabelInstruction(cg, TR::InstOpCode::label, node, diffXLabel);
+    cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressDiffLoc/09999/(%s)", comp->signature()));
+#if JAVA_SPEC_VERSION >= 21
+    generateTrg1Src2Instruction(cg, TR::InstOpCode::subf, node, resultReg, remainingReg, resultReg);
+#else
+    generateTrg1ImmInstruction(cg, TR::InstOpCode::li, node, resultReg, 0);
+#endif /* JAVA_SPEC_VERSION >= 21 */
+    generateLabelInstruction(cg, TR::InstOpCode::b, node, doneLabel);
+
+    generateLabelInstruction(cg, TR::InstOpCode::label, node, successLabel);
+    cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "inlineIntrinsicCompressDiffLoc/99999/(%s)", comp->signature()));
+
+    /* Everything is done. */
+    generateDepLabelInstruction(cg, TR::InstOpCode::label, node, doneLabel, deps);
+    doneLabel->setEndInternalControlFlow();
+
+    deps->stopUsingDepRegs(cg, resultReg);
+
+    node->setRegister(resultReg);
+
+    for (int32_t i = 0; i < node->getNumChildren(); i++) {
+        cg->decReferenceCount(node->getChild(i));
+    }
+
+    return resultReg;
+}
+
 static TR::Register *inlineStringCodingHasNegativesOrCountPositives(TR::Node *node, TR::CodeGenerator *cg,
     bool isCountPositives)
 {
@@ -14700,6 +14889,7 @@ bool J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
         static bool disableOSW = feGetEnv("TR_noPauseOnSpinWait") != NULL;
         static const bool disableStringIntrinsicBoundChk = (feGetEnv("TR_DisableStringIntrinsicBoundChk") != NULL);
         static const bool enableStringUTF16CompressCodegenOpt = (feGetEnv("TR_EnableStringUTF16CompressCodegenOpt") != NULL);
+        static const bool enableStringUTF16CompressCodegenOptCounters = (feGetEnv("TR_EnableStringUTF16CompressCodegenOptCounters") != NULL);
 
         switch (methodSymbol->getRecognizedMethod()) {
             case TR::java_lang_Thread_onSpinWait: {
@@ -15007,7 +15197,10 @@ bool J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&r
                 break;
 
             case TR::java_lang_StringUTF16_compress_CIBII:
-                if (enableStringUTF16CompressCodegenOpt) {
+                if (enableStringUTF16CompressCodegenOptCounters) {
+                    resultReg = inlineIntrinsicCompress_Counters(node, cg);
+                    return (resultReg != nullptr);
+                } else if (enableStringUTF16CompressCodegenOpt) {
                     resultReg = inlineIntrinsicCompress(node, cg);
                     return (resultReg != nullptr);
                 }
