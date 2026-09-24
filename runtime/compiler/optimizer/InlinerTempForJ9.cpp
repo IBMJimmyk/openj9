@@ -5485,10 +5485,16 @@ bool TR_J9InlinerPolicy::suppressInliningRecognizedInitialCallee(TR_CallSite *ca
             }
             break;
         case TR::java_lang_StringUTF16_compress_CIBII:
-            if (comp->target().cpu.isPower() && enableStringUTF16CompressCodegenOpt) {
-                return true;
+            if (!enableStringUTF16CompressCodegenOpt) {
+                return false;
             }
-            break;
+            if (!comp->target().cpu.isX86() && !comp->target().cpu.isPower()) {
+                return false;
+            }
+            if (comp->target().cpu.isX86() && (TR::Compiler->om.canGenerateArraylets() || TR::Compiler->om.isOffHeapAllocationEnabled())) {
+                return false;
+            }
+            return true;
         case TR::java_lang_StringCoding_hasNegatives:
             if (cg->getSupportsInlineStringCodingHasNegatives()) {
                 return true;
