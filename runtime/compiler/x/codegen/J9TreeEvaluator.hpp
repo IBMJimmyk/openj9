@@ -161,6 +161,7 @@ public:
     static TR::Register *awrtbariEvaluator(TR::Node *node, TR::CodeGenerator *cg);
     static TR::Register *inlineStringLatin1Inflate(TR::Node *node, TR::CodeGenerator *cg);
     static TR::Register *inlineStringUTF16Compress(TR::Node *node, TR::CodeGenerator *cg);
+    static TR::Register *inlineStringUTF16Compress_Counters(TR::Node *node, TR::CodeGenerator *cg);
     static TR::Register *inlineMathFma(TR::Node *node, TR::CodeGenerator *cg);
     static TR::Register *inlineVectorizedHashCode(TR::Node *node, TR::CodeGenerator *cg);
     static TR::Register *vectorizedHashCodeReductionHelper(TR::Node *node, TR::Register **vectorRegisters,
