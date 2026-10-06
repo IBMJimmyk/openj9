@@ -13504,9 +13504,9 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
 
     TR::Compilation *comp = cg->comp();
 
-    TR::Register *inputAddressReg = cg->evaluate(node->getChild(0));
-    TR::Register *inputOffsetReg = cg->gprClobberEvaluate(node->getChild(1), OP::MOV4RegReg);
-    TR::Register *outputAddressReg = cg->evaluate(node->getChild(2));
+    TR::Register *inputAddressReg = cg->gprClobberEvaluate(node->getChild(0), OP::MOV8RegReg);
+    TR::Register *inputOffsetReg = cg->evaluate(node->getChild(1));
+    TR::Register *outputAddressReg = cg->gprClobberEvaluate(node->getChild(2), OP::MOV8RegReg);
     TR::Register *outputOffsetReg = cg->gprClobberEvaluate(node->getChild(3), OP::MOV4RegReg);
     TR::Register *resultReg = cg->gprClobberEvaluate(node->getChild(4), OP::MOV4RegReg);
 
@@ -13552,7 +13552,17 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     Inst_Label(OP::JE4, node, doneLabel, cg);
 
     Inst_RegReg(OP::MOV4RegReg, node, remainingReg, resultReg, cg);
-    Inst_RegReg(OP::ADD4RegReg, node, inputOffsetReg, inputOffsetReg, cg);
+
+    TR::Node *inputOffsetNode = node->getChild(1);
+    if (!inputOffsetNode->isConstZeroValue()) {
+        Inst_RegMem(OP::LEA8RegMem, node, inputAddressReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 1, 0, cg), cg);
+    }
+
+    TR::Node *outputOffsetNode = node->getChild(3);
+    if (!outputOffsetNode->isConstZeroValue()) {
+        Inst_RegReg(OP::ADD8RegReg, node, outputAddressReg, outputOffsetReg, cg);
+        Inst_RegReg(OP::XOR8RegReg, node, outputOffsetReg, outputOffsetReg, cg);
+    }
 
     Inst_RegImm(OP::CMP4RegImm4, node, resultReg, 4, cg);
     Inst_Label(OP::JL4, node, load1ElementLabel, cg);
@@ -13568,7 +13578,7 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     Inst_Label(OP::JL4, node, load8ElementLabel, cg);
 
     Inst_Label(OP::label, node, load16ElementLoopLabel, cg);
-    Inst_RegMem(OP::MOVDQURegMem, node, temp1XmmReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 0, headerOffsetConst, cg), cg);
+    Inst_RegMem(OP::MOVDQURegMem, node, temp1XmmReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
     Inst_RegReg(OP::PTESTRegReg, node, temp1XmmReg, maskXmmReg, cg);
 #if JAVA_SPEC_VERSION >= 21
     Inst_Label(OP::JNE4, node, diffLabel, cg); //TODO: vectorize the non-Latin1 path.
@@ -13576,7 +13586,7 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     Inst_Label(OP::JNE4, node, resultLabel, cg);
 #endif
 
-    Inst_RegMem(OP::MOVDQURegMem, node, temp2XmmReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 0, headerOffsetConst+16, cg), cg);
+    Inst_RegMem(OP::MOVDQURegMem, node, temp2XmmReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst+16, cg), cg);
     Inst_RegReg(OP::PTESTRegReg, node, temp2XmmReg, maskXmmReg, cg);
 #if JAVA_SPEC_VERSION >= 21
     Inst_Label(OP::JNE4, node, diffLabel, cg); //TODO: vectorize the non-Latin1 path.
@@ -13588,7 +13598,6 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     Inst_MemReg(OP::MOVDQUMemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), temp1XmmReg, cg);
 
     Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -16, cg);
-    Inst_RegImm(OP::ADD4RegImm4, node, inputOffsetReg, 32, cg);
     Inst_RegImm(OP::ADD4RegImm4, node, outputOffsetReg, 16, cg);
 
     Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 16, cg);
@@ -13608,17 +13617,16 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
 
     //TODO: vectorize the non-Latin1 path
     Inst_Label(OP::label, node, diffLabel, cg);
-    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 0, headerOffsetConst, cg), cg);
-    Inst_RegImm(OP::AND4RegImm4, node, tempReg, 0x0000FF00, cg);
-    Inst_RegImm(OP::CMP4RegImm4, node, tempReg, 0, cg);
+    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
+    Inst_RegImm(OP::TEST2RegImm2, node, tempReg, 0xFF00, cg);
     Inst_Label(OP::JNE4, node, resultLabel, cg);
     Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -1, cg);
-    Inst_RegImm(OP::ADD4RegImm4, node, inputOffsetReg, 2, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, outputOffsetReg, 1, cg);
     Inst_Label(OP::JMP4, node, diffLabel, cg);
 #endif
 
     Inst_Label(OP::label, node, load8ElementLabel, cg);
-    Inst_RegMem(OP::MOVDQURegMem, node, temp1XmmReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 0, headerOffsetConst, cg), cg);
+    Inst_RegMem(OP::MOVDQURegMem, node, temp1XmmReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
     Inst_RegReg(OP::PTESTRegReg, node, temp1XmmReg, maskXmmReg, cg);
 #if JAVA_SPEC_VERSION >= 21
     Inst_Label(OP::JNE4, node, diffLabel, cg); //TODO: vectorize the non-Latin1 path.
@@ -13628,18 +13636,15 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     Inst_RegReg(OP::PACKUSWBRegReg, node, temp1XmmReg, maskXmmReg, cg); //Only the lower 8 bytes hold meaningful data
     Inst_MemReg(OP::MOVQMemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), temp1XmmReg, cg);
 
-    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -8, cg);
-    Inst_RegImm(OP::ADD4RegImm4, node, inputOffsetReg, 16, cg);
     Inst_RegImm(OP::ADD4RegImm4, node, outputOffsetReg, 8, cg);
-
-    Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 0, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -8, cg);
     Inst_Label(OP::JE4, node, doneLabel, cg);
 
     Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 4, cg);
     Inst_Label(OP::JL4, node, load1ElementLabel, cg);
 
     Inst_Label(OP::label, node, load4ElementLabel, cg);
-    Inst_RegMem(OP::L8RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 0, headerOffsetConst, cg), cg);
+    Inst_RegMem(OP::L8RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
     Inst_RegReg(OP::MOVQRegReg8, node, temp1XmmReg, tempReg, cg);
     Inst_RegRegImm(OP::PSHUFDRegRegImm1, node, temp1XmmReg, temp1XmmReg, 4, cg);
     Inst_RegReg(OP::PTESTRegReg, node, temp1XmmReg, maskXmmReg, cg);
@@ -13652,39 +13657,31 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     Inst_RegReg(OP::MOVDReg4Reg, node, tempReg, temp1XmmReg, cg);
     Inst_MemReg(OP::S4MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), tempReg, cg);
 
-    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -4, cg);
-    Inst_RegImm(OP::ADD4RegImm4, node, inputOffsetReg, 8, cg);
     Inst_RegImm(OP::ADD4RegImm4, node, outputOffsetReg, 4, cg);
-
-    Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 0, cg);
+    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -4, cg);
     Inst_Label(OP::JE4, node, doneLabel, cg);
 
     Inst_Label(OP::label, node, load1ElementLabel, cg);
-    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 0, headerOffsetConst, cg), cg);
+    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
+    Inst_RegImm(OP::TEST2RegImm2, node, tempReg, 0xFF00, cg);
+    Inst_Label(OP::JNE4, node, resultLabel, cg);
     Inst_MemReg(OP::S1MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), tempReg, cg);
-    Inst_RegImm(OP::AND4RegImm4, node, tempReg, 0x0000FF00, cg);
-    Inst_RegImm(OP::CMP4RegImm4, node, tempReg, 0, cg);
-    Inst_Label(OP::JNE4, node, resultLabel, cg);
-    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -1, cg);
-    Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 0, cg);
+    Inst_Reg(OP::DEC4Reg, node, remainingReg, cg);
     Inst_Label(OP::JE4, node, doneLabel, cg);
 
-    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 0, headerOffsetConst + 2, cg), cg);
+    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst + 2, cg), cg);
+    Inst_RegImm(OP::TEST2RegImm2, node, tempReg, 0xFF00, cg);
+    Inst_Label(OP::JNE4, node, resultLabel, cg);
     Inst_MemReg(OP::S1MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst + 1, cg), tempReg, cg);
-    Inst_RegImm(OP::AND4RegImm4, node, tempReg, 0x0000FF00, cg);
-    Inst_RegImm(OP::CMP4RegImm4, node, tempReg, 0, cg);
-    Inst_Label(OP::JNE4, node, resultLabel, cg);
-    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -1, cg);
-    Inst_RegImm(OP::CMP4RegImm4, node, remainingReg, 0, cg);
+    Inst_Reg(OP::DEC4Reg, node, remainingReg, cg);
     Inst_Label(OP::JE4, node, doneLabel, cg);
 
-    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, inputOffsetReg, 0, headerOffsetConst + 4, cg), cg);
-    Inst_MemReg(OP::S1MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst + 2, cg), tempReg, cg);
-    Inst_RegImm(OP::AND4RegImm4, node, tempReg, 0x0000FF00, cg);
-    Inst_RegImm(OP::CMP4RegImm4, node, tempReg, 0, cg);
+    Inst_RegMem(OP::L2RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst + 4, cg), cg);
+    Inst_RegImm(OP::TEST2RegImm2, node, tempReg, 0xFF00, cg);
     Inst_Label(OP::JNE4, node, resultLabel, cg);
+    Inst_MemReg(OP::S1MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst + 2, cg), tempReg, cg);
 #if JAVA_SPEC_VERSION >= 21
-    Inst_RegImm(OP::ADD4RegImm4, node, remainingReg, -1, cg);
+    Inst_Reg(OP::DEC4Reg, node, remainingReg, cg);
 #else
     Inst_Label(OP::JMP4, node, doneLabel, cg);
 #endif
