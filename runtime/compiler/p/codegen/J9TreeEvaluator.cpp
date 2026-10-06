@@ -13651,6 +13651,9 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     bool isAtLeastP9 = comp->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P9);
     bool isLE = comp->target().cpu.isLittleEndian();
 
+    TR_ASSERT_FATAL(isAtLeastP9 || !isLE,
+        "This evaluator is supported for Big Endian Power 8 or Power 9 and higher.");
+
     //TODO: maybe try and reduce register usage?
     TR::Register *inputAddressReg = cg->gprClobberEvaluate(node->getChild(0));
     TR::Register *inputOffsetReg = cg->gprClobberEvaluate(node->getChild(1));
@@ -13788,8 +13791,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     generateTrg1ImmInstruction(cg, TR::InstOpCode::li, node, tempReg, 16);
 
     generateTrg1Src2Instruction(cg, TR::InstOpCode::lvsl, node, permVecReg, tempReg, tempReg);
-    generateTrg1ImmInstruction(cg, TR::InstOpCode::vspltisb, node, vec1Reg, 1);
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::vslb, node, permVecReg, permVecReg, vec1Reg);
+    generateTrg1Src2Instruction(cg, TR::InstOpCode::vaddubm, node, permVecReg, permVecReg, permVecReg);
 
     generateLabelInstruction(cg, TR::InstOpCode::label, node, load16ElementLoopLabel);
 
@@ -13797,7 +13799,8 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         generateTrg1MemInstruction(cg, TR::InstOpCode::lxvh8x, node, vec1Reg, TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 16));
         generateTrg1MemInstruction(cg, TR::InstOpCode::lxvh8x, node, vec2Reg, TR::MemoryReference::createWithIndexReg(cg, inputAddressReg, tempReg, 16));
     } else {
-        //TODO: Power 8
+        generateTrg1MemInstruction(cg, TR::InstOpCode::lxvw4x, node, vec1Reg, TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 16));
+        generateTrg1MemInstruction(cg, TR::InstOpCode::lxvw4x, node, vec2Reg, TR::MemoryReference::createWithIndexReg(cg, inputAddressReg, tempReg, 16));
     }
 
     generateTrg1Src3Instruction(cg, TR::InstOpCode::vperm, node, vec3Reg, vec1Reg, vec2Reg, permVecReg);
@@ -13812,7 +13815,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     if (isAtLeastP9) {
         generateMemSrc1Instruction(cg, TR::InstOpCode::stxvb16x, node, TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 16), vec3Reg);
     } else {
-        //TODO: Power 8
+        generateMemSrc1Instruction(cg, TR::InstOpCode::stxvw4x, node, TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 16), vec3Reg);
     }
 
     /* 16 bytes were loaded and 32 bytes were stored so bump up inputAddressReg and outputAddressReg by those amounts.
@@ -13873,7 +13876,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 #endif
 
     generateLabelInstruction(cg, TR::InstOpCode::label, node, load8ElementLabel);
-    generateTrg1MemInstruction(cg, TR::InstOpCode::lxvh8x, node, vec1Reg, TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 16));
+    if (isAtLeastP9) {
+        generateTrg1MemInstruction(cg, TR::InstOpCode::lxvh8x, node, vec1Reg, TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 16));
+    } else {
+        generateTrg1MemInstruction(cg, TR::InstOpCode::lxvw4x, node, vec1Reg, TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 16));
+    }
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vand, node, vec2Reg, vec1Reg, maskVecReg);
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpequh_r, node, vec2Reg, vec2Reg, constZeroVecReg);
 #if JAVA_SPEC_VERSION >= 21
@@ -13883,7 +13890,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 #endif
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec1Reg, vec2Reg);
     generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrd, node, tempReg, vec2Reg);
-    generateMemSrc1Instruction(cg, TR::InstOpCode::stdbrx, node, TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 8), tempReg);
+    if (isLE) {
+        generateMemSrc1Instruction(cg, TR::InstOpCode::stdbrx, node, TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 8), tempReg);
+    } else {
+        generateMemSrc1Instruction(cg, TR::InstOpCode::stdx, node, TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 8), tempReg);
+    }
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -8);
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, inputAddressReg, inputAddressReg, 16);
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, outputAddressReg, outputAddressReg, 8);
@@ -13896,10 +13907,23 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load1ElementLabel, cr0Reg);
 
     generateLabelInstruction(cg, TR::InstOpCode::label, node, load4ElementLabel);
-    generateTrg1MemInstruction(cg, TR::InstOpCode::ldbrx, node, tempReg, TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 8));
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::mtvsrdd, node, vec1Reg, tempReg, tempReg);
-    generateTrg1ImmInstruction(cg, TR::InstOpCode::vspltish, node, vec2Reg, 8);
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::vrlh, node, vec1Reg, vec1Reg, vec2Reg);
+    if (isLE) {
+        generateTrg1MemInstruction(cg, TR::InstOpCode::ldbrx, node, tempReg, TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 8));
+    } else {
+        generateTrg1MemInstruction(cg, TR::InstOpCode::ldx, node, tempReg, TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 8));
+    }
+    if (isAtLeastP9) {
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::mtvsrdd, node, vec1Reg, tempReg, tempReg);
+    } else {
+        generateTrg1Src1Instruction(cg, TR::InstOpCode::mtvsrd, node, vec1Reg, tempReg);
+        generateTrg1Src2ImmInstruction(cg, TR::InstOpCode::xxpermdi, node, vec1Reg, vec1Reg, vec1Reg, 0);
+    }
+
+    if (isLE) {
+        generateTrg1ImmInstruction(cg, TR::InstOpCode::vspltish, node, vec2Reg, 8);
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::vrlh, node, vec1Reg, vec1Reg, vec2Reg);
+    }
+
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vand, node, vec2Reg, vec1Reg, maskVecReg);
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpequh_r, node, vec2Reg, vec2Reg, constZeroVecReg);
 #if JAVA_SPEC_VERSION >= 21
@@ -13909,7 +13933,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 #endif
     generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec1Reg, vec1Reg);
     generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrwz, node, tempReg, vec2Reg);
-    generateMemSrc1Instruction(cg, TR::InstOpCode::stwbrx, node, TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 4), tempReg);
+    if (isLE) {
+        generateMemSrc1Instruction(cg, TR::InstOpCode::stwbrx, node, TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 4), tempReg);
+    } else {
+        generateMemSrc1Instruction(cg, TR::InstOpCode::stwx, node, TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 4), tempReg);
+    }
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -4);
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, inputAddressReg, inputAddressReg, 8);
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, outputAddressReg, outputAddressReg, 4);
@@ -13945,7 +13973,6 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
     generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node, TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 2, 1), tempReg);
 
-    //TODO: check each JDK level
 #if JAVA_SPEC_VERSION >= 21
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
 #else
