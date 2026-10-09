@@ -13655,11 +13655,15 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         "This evaluator is supported for Big Endian Power 8 or Power 9 and higher.");
 
     //TODO: maybe try and reduce register usage?
+    TR::Node *inputOffsetNode = node->getChild(1);
+    TR::Node *outputOffsetNode = node->getChild(3);
+
     TR::Register *inputAddressReg = cg->gprClobberEvaluate(node->getChild(0));
-    TR::Register *inputOffsetReg = cg->gprClobberEvaluate(node->getChild(1));
+    TR::Register *inputOffsetReg = cg->gprClobberEvaluate(inputOffsetNode);
     TR::Register *outputAddressReg = cg->gprClobberEvaluate(node->getChild(2));
-    TR::Register *outputOffsetReg = cg->gprClobberEvaluate(node->getChild(3));
+    TR::Register *outputOffsetReg = cg->gprClobberEvaluate(outputOffsetNode);
     TR::Register *resultReg = cg->gprClobberEvaluate(node->getChild(4));
+
 
     TR::Register *tempReg = inputOffsetReg;
     TR::Register *temp2Reg = outputOffsetReg;
@@ -13725,8 +13729,13 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 
     // IMPORTANT: The upper 32 bits of a 64-bit register containing an int are undefined. Since the
     // indices are being passed in as ints, we must ensure that their upper 32 bits are not garbage.
-    generateTrg1Src1Instruction(cg, TR::InstOpCode::extsw, node, inputOffsetReg, inputOffsetReg);
-    generateTrg1Src1Instruction(cg, TR::InstOpCode::extsw, node, outputOffsetReg, outputOffsetReg);
+    if (!inputOffsetNode->isConstZeroValue()) {
+        generateTrg1Src1Instruction(cg, TR::InstOpCode::extsw, node, inputOffsetReg, inputOffsetReg);
+    }
+
+    if (!outputOffsetNode->isConstZeroValue()) {
+        generateTrg1Src1Instruction(cg, TR::InstOpCode::extsw, node, outputOffsetReg, outputOffsetReg);
+    }
 
     /*
      * Determine the address of the first byte to read either by loading from dataAddr or adding the header size.
@@ -13744,8 +13753,10 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
             TR::Compiler->om.contiguousArrayHeaderSizeInBytes());
     }
 
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, inputAddressReg, inputAddressReg, inputOffsetReg);
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, inputAddressReg, inputAddressReg, inputOffsetReg);
+    if (!inputOffsetNode->isConstZeroValue()) {
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, inputAddressReg, inputAddressReg, inputOffsetReg);
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, inputAddressReg, inputAddressReg, inputOffsetReg);
+    }
 
     /*
      * Determine the address of the first char to store either by loading from dataAddr or adding the header size.
@@ -13763,7 +13774,9 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
             TR::Compiler->om.contiguousArrayHeaderSizeInBytes());
     }
 
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, outputAddressReg, outputAddressReg, outputOffsetReg);
+    if (!outputOffsetNode->isConstZeroValue()) {
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, outputAddressReg, outputAddressReg, outputOffsetReg);
+    }
 
     /* If 1-3 bytes remain, jump to load1Label to handle them by by byte. */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 4);
@@ -14031,8 +14044,8 @@ static TR::Register *inlineIntrinsicCompress_Counters(TR::Node *node, TR::CodeGe
     TR::LabelSymbol *diffLabels[32];
 
     //TODO: can changes these
-    int32_t numLenChecks = 64; //max is 64
-    int32_t numDiffChecks = 8; //max is 32
+    int32_t numLenChecks = 32; //max is 64
+    int32_t numDiffChecks = 32; //max is 32
 
     for (int i = 0; i < numLenChecks; i++) {
          lenLabels[i] = generateLabelSymbol(cg);
