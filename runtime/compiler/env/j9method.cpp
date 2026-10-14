@@ -3171,6 +3171,7 @@ void TR_ResolvedJ9Method::construct()
         { x(TR::java_lang_StringUTF16_compress_CIBII,       "compress",             "([CI[BII)I") },
         { x(TR::java_lang_StringUTF16_compress_CII,         "compress",             "([CII)[B") },
         { x(TR::java_lang_StringUTF16_compress_III,         "compress",             "([III)[B") },
+        { x(TR::java_lang_StringUTF16_compress0_CIBII,      "compress0",            "([CI[BII)I") },
         { x(TR::java_lang_StringUTF16_getChar,              "getChar",              "([BI)C") },
         { x(TR::java_lang_StringUTF16_getChars_ByteArray,   "getChars",             "([BII[CI)V") },
         { x(TR::java_lang_StringUTF16_getChars_Integer,     "getChars",             "(II[B)I") },
