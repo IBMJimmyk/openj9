@@ -13648,7 +13648,6 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         "This evaluator should only be triggered when inlining StringUTF.compress([CI[BII)I is enabled on Java 11 "
         "onwards!\n");
 
-    //TODO: Big endian and Power 8 implementations
     TR::Compilation *comp = cg->comp();
     bool isAtLeastP9 = comp->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P9);
     bool isLE = comp->target().cpu.isLittleEndian();
@@ -13656,7 +13655,6 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     TR_ASSERT_FATAL(isAtLeastP9 || !isLE,
         "This evaluator is supported for Big Endian Power 8 or Power 9 and higher.");
 
-    //TODO: maybe try and reduce register usage?
     TR::Node *inputOffsetNode = node->getChild(1);
     TR::Node *outputOffsetNode = node->getChild(3);
 
@@ -13693,8 +13691,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     TR::LabelSymbol *vectorDiff4Label = generateLabelSymbol(cg);
 #endif
 
-    //TODO: verify dependencies, exclude GPR0
-    int32_t numRegs = 14; //6 GPR, 6 VRF, 2 CCR
+    int32_t numRegs = 14; // 6 GPR, 6 VRF, 2 CCR
     TR::RegisterDependencyConditions *deps = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(0, numRegs, cg->trMemory());
     deps->addPostCondition(inputAddressReg, TR::RealRegister::NoReg);
     deps->getPostConditions()->getRegisterDependency(deps->getAddCursorForPost() - 1)->setExcludeGPR0();

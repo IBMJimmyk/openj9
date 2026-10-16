@@ -567,15 +567,21 @@ public:
      */
     void setSupportsInlineStringLatin1Inflate() { _j9Flags.set(SupportsInlineStringLatin1Inflate); }
 
-    //TODO: indicate which version of compress
     /** \brief
      *    Determines whether the code generator supports inlining of java/lang/StringUTF16.compress
+     *
+     *    For JDK8, this does nothing since StringUTF16 does not exist.
+     *    For JDK9-26, this tests support for java/lang/StringUTF16.compress([CI[BII)I
+     *    For JDK27+, this tests support for java/lang/StringUTF16.compress0([CI[BII)I
      */
     bool getSupportsInlineStringUTF16Compress() { return _j9Flags.testAny(SupportsInlineStringUTF16Compress); }
 
-    //TODO: indicate which version of compress
     /** \brief
      *    The code generator supports inlining of java/lang/StringUTF16.compress
+     *
+     *    For JDK8, this does nothing since StringUTF16 does not exist.
+     *    For JDK9-26, this sets support for java/lang/StringUTF16.compress([CI[BII)I
+     *    For JDK27+, this sets support for java/lang/StringUTF16.compress0([CI[BII)I
      */
     void setSupportsInlineStringUTF16Compress() { _j9Flags.set(SupportsInlineStringUTF16Compress); }
 
