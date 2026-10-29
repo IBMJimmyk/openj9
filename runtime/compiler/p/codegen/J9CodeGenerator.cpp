@@ -106,7 +106,8 @@ void J9::Power::CodeGenerator::initialize()
         && !TR::Compiler->om.canGenerateArraylets() && !disableStringInflateIntrinsic)
         cg->setSupportsInlineStringLatin1Inflate();
 
-    static const bool disableStringCompressIntrinsic = feGetEnv("TR_DisableStringCompressIntrinsic") != NULL;
+    static const bool disableStringCompressIntrinsic = feGetEnv("TR_EnableStringCompressIntrinsic") == NULL;
+    //static const bool disableStringCompressIntrinsic = feGetEnv("TR_DisableStringCompressIntrinsic") != NULL;
     if (comp->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P8)
         && (comp->target().cpu.isBigEndian() || comp->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P9))
         && comp->target().cpu.supportsFeature(OMR_FEATURE_PPC_HAS_VSX) && comp->target().is64Bit()

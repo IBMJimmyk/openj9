@@ -13651,6 +13651,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 
     TR::Compilation *comp = cg->comp();
     bool isAtLeastP9 = comp->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P9);
+    bool isAtLeastP10 = comp->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P10);
     bool isLE = comp->target().cpu.isLittleEndian();
 
     TR_ASSERT_FATAL(isAtLeastP9 || !isLE, "This evaluator is supported for Big Endian Power 8 or Power 9 and higher.");
@@ -13783,9 +13784,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, outputAddressReg, outputAddressReg, outputOffsetReg);
     }
 
-    /* If 1-3 elements remain, jump to load1ElementLabel to handle them element by element. */
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 4);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load1ElementLabel, cr0Reg);
+    if (!isAtLeastP10) {
+        /* If 1-3 elements remain, jump to load1ElementLabel to handle them element by element. */
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 4);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load1ElementLabel, cr0Reg);
+    }
 
     /* Initialize constZeroVecReg to all 0s. This is needed in the 4, 8 and 16 element cases. */
     generateTrg1ImmInstruction(cg, TR::InstOpCode::vspltisb, node, constZeroVecReg, 0);
@@ -13796,7 +13799,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 
     /* If 4-7 elements remain, first jump to load4ElementLabel to handle the first 4 elements. */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
+    generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg); //load4ElementLabel also handles residue under Power 10
 
     /* If 8-15 elements remain, first jump to load8ElementLabel to handle the first 8 elements. */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 16);
@@ -13896,9 +13899,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
     generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
 
-    /* If 1-3 elements remain, jump to load1ElementLabel to handle them element by element. */
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 4);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load1ElementLabel, cr0Reg);
+    if (!isAtLeastP10) {
+        /* If 1-3 elements remain, jump to load1ElementLabel to handle them element by element. */
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 4);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load1ElementLabel, cr0Reg);
+    }
 
     /* If 4-7 elements remain, first jump to load4ElementLabel to handle the first 4 elements. */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
@@ -13970,27 +13975,29 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     generateTrg1Src2Instruction(cg, TR::InstOpCode::subf, node, remainingReg, tempReg, remainingReg);
     generateLabelInstruction(cg, TR::InstOpCode::b, node, resultLabel);
 
-    /*
-     * The incoming vec2Reg contains 8 halfwords. Each halfword corresponds to 1 input halfword.
-     * Only the first 4 have valid data. The remaining 4 can safely be garbage.
-     * Each halfword is 0xFFFF if the high byte of the halfword was non-zero.
-     * Otherwise, the halfword is 0x0000.
-     * The number of input halfwords with a zero high byte can be determined by counting leading zeroes in vec2Reg.
-     * A shift right by 4 is then done to divide by 16 since there are 16 zero bits per input halfword element.
-     * This result is subtracted from remainingReg to pin point the index of the halfword with a non-zero high byte.
-     * One of them is guaranteed to have a non-zero high byte so this only needs to be done once.
-     * This section ends with a branch to resultLabel to calculcate the final return value.
-     */
-    generateLabelInstruction(cg, TR::InstOpCode::label, node, vectorDiff4Label);
-    if (!isAtLeastP9) {
-        /* Power 8 doesn't have a vcmpneh instruction so the bits need to be flipped. */
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::vnor, node, vec2Reg, vec2Reg, vec2Reg);
+    if (!isAtLeastP10) {
+        /*
+         * The incoming vec2Reg contains 8 halfwords. Each halfword corresponds to 1 input halfword.
+         * Only the first 4 have valid data. The remaining 4 can safely be garbage.
+         * Each halfword is 0xFFFF if the high byte of the halfword was non-zero.
+         * Otherwise, the halfword is 0x0000.
+         * The number of input halfwords with a zero high byte can be determined by counting leading zeroes in vec2Reg.
+         * A shift right by 4 is then done to divide by 16 since there are 16 zero bits per input halfword element.
+         * This result is subtracted from remainingReg to pin point the index of the halfword with a non-zero high byte.
+         * One of them is guaranteed to have a non-zero high byte so this only needs to be done once.
+         * This section ends with a branch to resultLabel to calculcate the final return value.
+         */
+        generateLabelInstruction(cg, TR::InstOpCode::label, node, vectorDiff4Label);
+        if (!isAtLeastP9) {
+            /* Power 8 doesn't have a vcmpneh instruction so the bits need to be flipped. */
+            generateTrg1Src2Instruction(cg, TR::InstOpCode::vnor, node, vec2Reg, vec2Reg, vec2Reg);
+        }
+        generateTrg1Src1Instruction(cg, TR::InstOpCode::vclzd, node, vec2Reg, vec2Reg);
+        generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrd, node, tempReg, vec2Reg);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::sradi, node, tempReg, tempReg, 4);
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::subf, node, remainingReg, tempReg, remainingReg);
+       generateLabelInstruction(cg, TR::InstOpCode::b, node, resultLabel);
     }
-    generateTrg1Src1Instruction(cg, TR::InstOpCode::vclzd, node, vec2Reg, vec2Reg);
-    generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrd, node, tempReg, vec2Reg);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::sradi, node, tempReg, tempReg, 4);
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::subf, node, remainingReg, tempReg, remainingReg);
-    generateLabelInstruction(cg, TR::InstOpCode::b, node, resultLabel);
 #endif
 
     /*
@@ -14006,7 +14013,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
      *   vand      vec2Reg, vec1Reg, maskVecReg      //Clears the lower byte of each halfword
      *   vcmpneh.  vec2Reg, vec2Reg, constZeroVecReg //Checks if any of the high bytes are non-zero
      *   bne       cr6Reg, vectorDiff8Label          //If any are non-zero, jump to vectorDiff8Label
-     *   vpkuhum   vec2Reg, vec1Reg, vec2Reg         //vec2Reg = 01_02_03_04_05_06_07_08_XX_XX_XX_XX_XX_XX_XX_XX
+     *   vpkuhum   vec2Reg, vec1Reg, vec1Reg         //vec2Reg = 01_02_03_04_05_06_07_08_XX_XX_XX_XX_XX_XX_XX_XX
      *   mfvsrd    tempReg, vec2Reg                  //tempReg = 01_02_03_04_05_06_07_08
      *   stdbrx    tempReg, r0, outputAddressReg     //Store the result to output. stdx used instead for BE.
      *
@@ -14015,7 +14022,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
      *   vand      vec2Reg, vec1Reg, maskVecReg      //Clears the lower byte of each halfword
      *   vcmpequh. vec2Reg, vec2Reg, constZeroVecReg //Checks if any of the high bytes are non-zero
      *   bge       cr6Reg, vectorDiff8Label          //If any are non-zero, jump to vectorDiff8Label
-     *   vpkuhum   vec2Reg, vec1Reg, vec2Reg         //vec2Reg = 01_02_03_04_05_06_07_08_XX_XX_XX_XX_XX_XX_XX_XX
+     *   vpkuhum   vec2Reg, vec1Reg, vec1Reg         //vec2Reg = 01_02_03_04_05_06_07_08_XX_XX_XX_XX_XX_XX_XX_XX
      *   mfvsrd    tempReg, vec2Reg                  //tempReg = 01_02_03_04_05_06_07_08
      *   stdx      tempReg, r0, outputAddressReg     //Store the result to output.
      *
@@ -14049,7 +14056,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 #endif
     }
 
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec1Reg, vec2Reg);
+    generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec1Reg, vec1Reg);
     generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrd, node, tempReg, vec2Reg);
     if (isLE) {
         generateMemSrc1Instruction(cg, TR::InstOpCode::stdbrx, node,
@@ -14068,155 +14075,177 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
     generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
 
-    /* If 1-3 elements remain, jump to load1ElementLabel to handle them element by element. */
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 4);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load1ElementLabel, cr0Reg);
+    if (isAtLeastP10) {
+        generateLabelInstruction(cg, TR::InstOpCode::label, node, load4ElementLabel);
+        generateShiftLeftImmediateLong(cg, node, tempReg, remainingReg, 57);
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::lxvll, node, vec1Reg, inputAddressReg, tempReg);
+        if (isLE) {
+            generateTrg1ImmInstruction(cg, TR::InstOpCode::vspltish, node, vec2Reg, 8);
+            generateTrg1Src2Instruction(cg, TR::InstOpCode::vrlh, node, vec1Reg, vec1Reg, vec2Reg);
+        }
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::vand, node, vec2Reg, vec1Reg, maskVecReg);
 
-    /*
-     * The following instructions tries to load 4 halfwords from the input array.
-     * The high byte of each halfword is checked to see if they are non-zero
-     * If the upper byte of a halfword is non-zero, this process is abaondoned.
-     * For JDK21+, the code jumps to vectorDiff4Label to locate the index of the halfword with a non-zero high byte.
-     * Otherwise, jump to resultLabel. The exact location does not need to be known since 0 will be returned.
-     * The data is compressed then then stored as 4 bytes to the output array.
-     *
-     * Power 9 Big Endian case:
-     *   ldx       tempReg, r0, inputAddressReg      //eg. tempReg = 0001_0002_0003_0004
-     *   mtvsrdd   vec1Reg, tempReg, tempReg         //vec1Reg = 0001_0002_0003_0004_0001_0002_0003_0004
-     *   vand      vec2Reg, vec1Reg, maskVecReg      //Clears the lower byte of each halfword
-     *   vcmpneh.  vec2Reg, vec2Reg, constZeroVecReg //Checks if any of the high bytes are non-zero
-     *   bne       cr6Reg, vectorDiff4Label          //If any are non-zero, jump to vectorDiff4Label
-     *   vpkuhum   vec2Reg, vec1Reg, vec1Reg         //vec2Reg = 01_02_03_04_01_02_03_04_XX_XX_XX_XX_XX_XX_XX_XX
-     *   mfvsrwz   tempReg, vec2Reg                  //tempReg = 01_02_03_04
-     *   stwx      tempReg, r0, outputAddressReg     //Store the result to output.
-     *
-     * Power 9 Little Endian case:
-     *   ldbrx     tempReg, r0, inputAddressReg      //eg. tempReg = 0100_0200_0300_0400
-     *   mtvsrdd   vec1Reg, tempReg, tempReg         //vec1Reg = 0100_0200_0300_0400_0100_0200_0300_0400
-     *   vspltish  vec2Reg, 8                        //Rotate each halfword by 8 to get the bytes in the right order.
-     *   vrlh      vec1Reg, vec1Reg, vec2Reg         //vec1Reg = 0001_0002_0003_0004_0001_0002_0003_0004
-     *   vand      vec2Reg, vec1Reg, maskVecReg      //Clears the lower byte of each halfword
-     *   vcmpneh.  vec2Reg, vec2Reg, constZeroVecReg //Checks if any of the high bytes are non-zero
-     *   bne       cr6Reg, vectorDiff4Label          //If any are non-zero, jump to vectorDiff4Label
-     *   vpkuhum   vec2Reg, vec1Reg, vec1Reg         //vec2Reg = 01_02_03_04_01_02_03_04_XX_XX_XX_XX_XX_XX_XX_XX
-     *   mfvsrwz   tempReg, vec2Reg                  //tempReg = 01_02_03_04
-     *   stwbrx    tempReg, r0, outputAddressReg     //Store the result to output.
-     *
-     * Power 8 Big Endian case:
-     *   ldx       tempReg, r0, inputAddressReg      //eg. tempReg = 0001_0002_0003_0004
-     *   mtvsrd    vec1Reg, tempReg                  //vec1Reg = 0001_0002_0003_0004_XXXX_XXXX_XXXX_XXXX
-     *   xxpermdi  vec1Reg, vec1Reg, vec1Reg, 0      //vec1Reg = 0001_0002_0003_0004_0001_0002_0003_0004
-     *   vand      vec2Reg, vec1Reg, maskVecReg      //Clears the lower byte of each halfword
-     *   vcmpequh. vec2Reg, vec2Reg, constZeroVecReg //Checks if any of the high bytes are non-zero
-     *   bge       cr6Reg, vectorDiff4Label          //If any are non-zero, jump to vectorDiff4Label
-     *   vpkuhum   vec2Reg, vec1Reg, vec1Reg         //vec2Reg = 01_02_03_04_01_02_03_04_XX_XX_XX_XX_XX_XX_XX_XX
-     *   mfvsrwz   tempReg, vec2Reg                  //tempReg = 01_02_03_04
-     *   stwx      tempReg, r0, outputAddressReg     //Store the result to output.
-     *
-     * Power 8 Little Endian case:
-     *   Unsupported
-     */
-    generateLabelInstruction(cg, TR::InstOpCode::label, node, load4ElementLabel);
-
-    if (isLE) {
-        generateTrg1MemInstruction(cg, TR::InstOpCode::ldbrx, node, tempReg,
-            TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 8));
-    } else {
-        generateTrg1MemInstruction(cg, TR::InstOpCode::ldx, node, tempReg,
-            TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 8));
-    }
-
-    if (isAtLeastP9) {
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::mtvsrdd, node, vec1Reg, tempReg, tempReg);
-    } else {
-        generateTrg1Src1Instruction(cg, TR::InstOpCode::mtvsrd, node, vec1Reg, tempReg);
-        generateTrg1Src2ImmInstruction(cg, TR::InstOpCode::xxpermdi, node, vec1Reg, vec1Reg, vec1Reg, 0);
-    }
-
-    if (isLE) {
-        generateTrg1ImmInstruction(cg, TR::InstOpCode::vspltish, node, vec2Reg, 8);
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::vrlh, node, vec1Reg, vec1Reg, vec2Reg);
-    }
-
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::vand, node, vec2Reg, vec1Reg, maskVecReg);
-
-    if (isAtLeastP9) {
         generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpneh_r, node, vec2Reg, vec2Reg, constZeroVecReg);
 #if JAVA_SPEC_VERSION >= 21
-        generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, vectorDiff4Label, cr6Reg);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, vectorDiff8Label, cr6Reg);
 #else
         generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr6Reg);
 #endif
+
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec1Reg, vec1Reg);
+        generateShiftLeftImmediateLong(cg, node, tempReg, remainingReg, 56);
+        generateSrc3Instruction(cg, TR::InstOpCode::stxvll, node, vec2Reg, outputAddressReg, tempReg);
     } else {
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpequh_r, node, vec2Reg, vec2Reg, constZeroVecReg);
+        /* If 1-3 elements remain, jump to load1ElementLabel to handle them element by element. */
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 4);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load1ElementLabel, cr0Reg);
+
+        /*
+         * The following instructions tries to load 4 halfwords from the input array.
+         * The high byte of each halfword is checked to see if they are non-zero
+         * If the upper byte of a halfword is non-zero, this process is abaondoned.
+         * For JDK21+, the code jumps to vectorDiff4Label to locate the index of the halfword with a non-zero high byte.
+         * Otherwise, jump to resultLabel. The exact location does not need to be known since 0 will be returned.
+         * The data is compressed then then stored as 4 bytes to the output array.
+         *
+         * Power 9 Big Endian case:
+         *   ldx       tempReg, r0, inputAddressReg      //eg. tempReg = 0001_0002_0003_0004
+         *   mtvsrdd   vec1Reg, tempReg, tempReg         //vec1Reg = 0001_0002_0003_0004_0001_0002_0003_0004
+         *   vand      vec2Reg, vec1Reg, maskVecReg      //Clears the lower byte of each halfword
+         *   vcmpneh.  vec2Reg, vec2Reg, constZeroVecReg //Checks if any of the high bytes are non-zero
+         *   bne       cr6Reg, vectorDiff4Label          //If any are non-zero, jump to vectorDiff4Label
+         *   vpkuhum   vec2Reg, vec1Reg, vec1Reg         //vec2Reg = 01_02_03_04_01_02_03_04_XX_XX_XX_XX_XX_XX_XX_XX
+         *   mfvsrwz   tempReg, vec2Reg                  //tempReg = 01_02_03_04
+         *   stwx      tempReg, r0, outputAddressReg     //Store the result to output.
+         *
+         * Power 9 Little Endian case:
+         *   ldbrx     tempReg, r0, inputAddressReg      //eg. tempReg = 0100_0200_0300_0400
+         *   mtvsrdd   vec1Reg, tempReg, tempReg         //vec1Reg = 0100_0200_0300_0400_0100_0200_0300_0400
+         *   vspltish  vec2Reg, 8                        //Rotate each halfword by 8 to correct byte order.
+         *   vrlh      vec1Reg, vec1Reg, vec2Reg         //vec1Reg = 0001_0002_0003_0004_0001_0002_0003_0004
+         *   vand      vec2Reg, vec1Reg, maskVecReg      //Clears the lower byte of each halfword
+         *   vcmpneh.  vec2Reg, vec2Reg, constZeroVecReg //Checks if any of the high bytes are non-zero
+         *   bne       cr6Reg, vectorDiff4Label          //If any are non-zero, jump to vectorDiff4Label
+         *   vpkuhum   vec2Reg, vec1Reg, vec1Reg         //vec2Reg = 01_02_03_04_01_02_03_04_XX_XX_XX_XX_XX_XX_XX_XX
+         *   mfvsrwz   tempReg, vec2Reg                  //tempReg = 01_02_03_04
+         *   stwbrx    tempReg, r0, outputAddressReg     //Store the result to output.
+         *
+         * Power 8 Big Endian case:
+         *   ldx       tempReg, r0, inputAddressReg      //eg. tempReg = 0001_0002_0003_0004
+         *   mtvsrd    vec1Reg, tempReg                  //vec1Reg = 0001_0002_0003_0004_XXXX_XXXX_XXXX_XXXX
+         *   xxpermdi  vec1Reg, vec1Reg, vec1Reg, 0      //vec1Reg = 0001_0002_0003_0004_0001_0002_0003_0004
+         *   vand      vec2Reg, vec1Reg, maskVecReg      //Clears the lower byte of each halfword
+         *   vcmpequh. vec2Reg, vec2Reg, constZeroVecReg //Checks if any of the high bytes are non-zero
+         *   bge       cr6Reg, vectorDiff4Label          //If any are non-zero, jump to vectorDiff4Label
+         *   vpkuhum   vec2Reg, vec1Reg, vec1Reg         //vec2Reg = 01_02_03_04_01_02_03_04_XX_XX_XX_XX_XX_XX_XX_XX
+         *   mfvsrwz   tempReg, vec2Reg                  //tempReg = 01_02_03_04
+         *   stwx      tempReg, r0, outputAddressReg     //Store the result to output.
+         *
+         * Power 8 Little Endian case:
+         *   Unsupported
+         */
+        generateLabelInstruction(cg, TR::InstOpCode::label, node, load4ElementLabel);
+
+        if (isLE) {
+            generateTrg1MemInstruction(cg, TR::InstOpCode::ldbrx, node, tempReg,
+                TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 8));
+        } else {
+            generateTrg1MemInstruction(cg, TR::InstOpCode::ldx, node, tempReg,
+                TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 8));
+        }
+
+        if (isAtLeastP9) {
+            generateTrg1Src2Instruction(cg, TR::InstOpCode::mtvsrdd, node, vec1Reg, tempReg, tempReg);
+        } else {
+            generateTrg1Src1Instruction(cg, TR::InstOpCode::mtvsrd, node, vec1Reg, tempReg);
+            generateTrg1Src2ImmInstruction(cg, TR::InstOpCode::xxpermdi, node, vec1Reg, vec1Reg, vec1Reg, 0);
+        }
+
+        if (isLE) {
+            generateTrg1ImmInstruction(cg, TR::InstOpCode::vspltish, node, vec2Reg, 8);
+            generateTrg1Src2Instruction(cg, TR::InstOpCode::vrlh, node, vec1Reg, vec1Reg, vec2Reg);
+        }
+
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::vand, node, vec2Reg, vec1Reg, maskVecReg);
+
+        if (isAtLeastP9) {
+            generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpneh_r, node, vec2Reg, vec2Reg, constZeroVecReg);
 #if JAVA_SPEC_VERSION >= 21
-        generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, vectorDiff4Label, cr6Reg);
+            generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, vectorDiff4Label, cr6Reg);
 #else
-        generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, resultLabel, cr6Reg);
+            generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr6Reg);
 #endif
+        } else {
+            generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpequh_r, node, vec2Reg, vec2Reg, constZeroVecReg);
+#if JAVA_SPEC_VERSION >= 21
+            generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, vectorDiff4Label, cr6Reg);
+#else
+            generateConditionalBranchInstruction(cg, TR::InstOpCode::bge, node, resultLabel, cr6Reg);
+#endif
+        }
+
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec1Reg, vec1Reg);
+        generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrwz, node, tempReg, vec2Reg);
+
+        if (isLE) {
+            generateMemSrc1Instruction(cg, TR::InstOpCode::stwbrx, node,
+                TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 4), tempReg);
+        } else {
+            generateMemSrc1Instruction(cg, TR::InstOpCode::stwx, node,
+                TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 4), tempReg);
+        }
+
+        /* 4 halfwords were compressed so subtract that from remainingReg and bump up the address registers. */
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -4);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, inputAddressReg, inputAddressReg, 8);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, outputAddressReg, outputAddressReg, 4);
+
+        /* If remainingReg is 0 then all elements have been compressed. Jump to the end. */
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
+
+        generateLabelInstruction(cg, TR::InstOpCode::label, node, load1ElementLabel);
+
+        /*
+         * Unrolled byte by byte section.
+         * No more than 3 bytes left to be processed at this point.
+         * They are individually loaded, then stored back as a byte.
+         * If the high byte of the loaded halfword is non-zero, jump to resultLabel to calculcate the return value.
+         */
+        generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg,
+            TR::MemoryReference::createWithDisplacement(cg, inputAddressReg, 0, 2));
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::andi_r, node, temp2Reg, tempReg, 0xFF00);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
+        generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node,
+            TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 0, 1), tempReg);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
+
+        generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg,
+            TR::MemoryReference::createWithDisplacement(cg, inputAddressReg, 2, 2));
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::andi_r, node, temp2Reg, tempReg, 0xFF00);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
+        generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node,
+            TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 1, 1), tempReg);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
+
+        generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg,
+            TR::MemoryReference::createWithDisplacement(cg, inputAddressReg, 4, 2));
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::andi_r, node, temp2Reg, tempReg, 0xFF00);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
+        generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node,
+            TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 2, 1), tempReg);
     }
-
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec1Reg, vec1Reg);
-    generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrwz, node, tempReg, vec2Reg);
-
-    if (isLE) {
-        generateMemSrc1Instruction(cg, TR::InstOpCode::stwbrx, node,
-            TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 4), tempReg);
-    } else {
-        generateMemSrc1Instruction(cg, TR::InstOpCode::stwx, node,
-            TR::MemoryReference::createWithIndexReg(cg, NULL, outputAddressReg, 4), tempReg);
-    }
-
-    /* 4 halfwords were compressed so subtract that from remainingReg and bump up the address registers. */
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -4);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, inputAddressReg, inputAddressReg, 8);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, outputAddressReg, outputAddressReg, 4);
-
-    /* If remainingReg is 0 then all elements have been compressed. Jump to the end. */
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
-
-    generateLabelInstruction(cg, TR::InstOpCode::label, node, load1ElementLabel);
-
-    /*
-     * Unrolled byte by byte section.
-     * No more than 3 bytes left to be processed at this point.
-     * They are individually loaded, then stored back as a byte.
-     * If the high byte of the loaded halfword is non-zero, jump to resultLabel instead to calculcate the return value.
-     */
-    generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg,
-        TR::MemoryReference::createWithDisplacement(cg, inputAddressReg, 0, 2));
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::andi_r, node, temp2Reg, tempReg, 0xFF00);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
-    generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node,
-        TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 0, 1), tempReg);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
-
-    generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg,
-        TR::MemoryReference::createWithDisplacement(cg, inputAddressReg, 2, 2));
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::andi_r, node, temp2Reg, tempReg, 0xFF00);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
-    generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node,
-        TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 1, 1), tempReg);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
-
-    generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg,
-        TR::MemoryReference::createWithDisplacement(cg, inputAddressReg, 4, 2));
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::andi_r, node, temp2Reg, tempReg, 0xFF00);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
-    generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node,
-        TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 2, 1), tempReg);
 
     /*
      * For JDK21 it is possible to fallthough here without branching.
      * This is because the correct return value is calculated either way.
      */
 #if JAVA_SPEC_VERSION >= 21
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
+    generateTrg1ImmInstruction(cg, TR::InstOpCode::li, node, remainingReg, 0);
 #else
     generateLabelInstruction(cg, TR::InstOpCode::b, node, doneLabel);
 #endif /* JAVA_SPEC_VERSION >= 21 */
