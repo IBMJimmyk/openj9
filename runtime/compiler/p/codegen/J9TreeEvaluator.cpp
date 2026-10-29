@@ -13649,9 +13649,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         "This evaluator should only be triggered when inlining StringUTF.compress([CI[BII)I is enabled on Java 11 "
         "onwards!\n");
 
+    static const bool enableP10Compress = feGetEnv("TR_EnableP10Compress") != NULL;
+
     TR::Compilation *comp = cg->comp();
     bool isAtLeastP9 = comp->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P9);
-    bool isAtLeastP10 = comp->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P10);
+    bool isAtLeastP10 = (enableP10Compress && comp->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P10));
     bool isLE = comp->target().cpu.isLittleEndian();
 
     TR_ASSERT_FATAL(isAtLeastP9 || !isLE, "This evaluator is supported for Big Endian Power 8 or Power 9 and higher.");
