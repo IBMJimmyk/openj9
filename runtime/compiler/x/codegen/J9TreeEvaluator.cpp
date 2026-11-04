@@ -13647,7 +13647,6 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
 
     Inst_Label(OP::label, node, load4ElementLabel, cg);
     Inst_RegMem(OP::MOVQRegMem, node, temp1XmmReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
-    Inst_RegRegImm(OP::PSHUFDRegRegImm1, node, temp1XmmReg, temp1XmmReg, 4, cg);
     Inst_RegReg(OP::PTESTRegReg, node, temp1XmmReg, maskXmmReg, cg);
 #if JAVA_SPEC_VERSION >= 21
     Inst_Label(OP::JNE4, node, diffLabel, cg); //TODO: vectorize the non-Latin1 path.
