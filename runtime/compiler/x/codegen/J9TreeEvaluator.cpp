@@ -13550,7 +13550,7 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     Inst_Label(OP::label, node, startLabel, cg);
     startLabel->setStartInternalControlFlow();
 
-    Inst_RegImm(OP::CMP4RegImms, node, resultReg, 0, cg);
+    Inst_RegReg(OP::TEST4RegReg, node, resultReg, resultReg, cg);
     Inst_Label(OP::JE4, node, doneLabel, cg);
 
     Inst_RegReg(OP::MOV4RegReg, node, remainingReg, resultReg, cg);
@@ -13563,7 +13563,7 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     TR::Node *outputOffsetNode = node->getChild(3);
     if (!outputOffsetNode->isConstZeroValue()) {
         Inst_RegReg(OP::ADD8RegReg, node, outputAddressReg, outputOffsetReg, cg);
-        Inst_RegReg(OP::XOR8RegReg, node, outputOffsetReg, outputOffsetReg, cg);
+        Inst_RegReg(OP::XOR4RegReg, node, outputOffsetReg, outputOffsetReg, cg);
     }
 
     Inst_RegImm(OP::CMP4RegImms, node, resultReg, 4, cg);
@@ -13605,7 +13605,7 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     Inst_RegImm(OP::CMP4RegImms, node, remainingReg, 16, cg);
     Inst_Label(OP::JGE4, node, load16ElementLoopLabel, cg);
 
-    Inst_RegImm(OP::CMP4RegImms, node, remainingReg, 0, cg);
+    Inst_RegReg(OP::TEST4RegReg, node, remainingReg, remainingReg, cg);
     Inst_Label(OP::JE4, node, doneLabel, cg);
 
     Inst_RegImm(OP::CMP4RegImms, node, remainingReg, 4, cg);
@@ -13646,8 +13646,7 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     Inst_Label(OP::JL4, node, load1ElementLabel, cg);
 
     Inst_Label(OP::label, node, load4ElementLabel, cg);
-    Inst_RegMem(OP::L8RegMem, node, tempReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
-    Inst_RegReg(OP::MOVQRegReg8, node, temp1XmmReg, tempReg, cg);
+    Inst_RegMem(OP::MOVQRegMem, node, temp1XmmReg, MRef_BISdisp32(inputAddressReg, outputOffsetReg, 1, headerOffsetConst, cg), cg);
     Inst_RegRegImm(OP::PSHUFDRegRegImm1, node, temp1XmmReg, temp1XmmReg, 4, cg);
     Inst_RegReg(OP::PTESTRegReg, node, temp1XmmReg, maskXmmReg, cg);
 #if JAVA_SPEC_VERSION >= 21
@@ -13656,8 +13655,7 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
     Inst_Label(OP::JNE4, node, resultLabel, cg);
 #endif
     Inst_RegReg(OP::PACKUSWBRegReg, node, temp1XmmReg, maskXmmReg, cg); //Only the lower 4 bytes hold meaningful data
-    Inst_RegReg(OP::MOVDReg4Reg, node, tempReg, temp1XmmReg, cg);
-    Inst_MemReg(OP::S4MemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), tempReg, cg);
+    Inst_MemReg(OP::MOVDMemReg, node, MRef_BISdisp32(outputAddressReg, outputOffsetReg, 0, headerOffsetConst, cg), temp1XmmReg, cg);
 
     Inst_RegImm(OP::ADD4RegImms, node, outputOffsetReg, 4, cg);
     Inst_RegImm(OP::ADD4RegImms, node, remainingReg, -4, cg);
@@ -13692,7 +13690,7 @@ TR::Register *J9::X86::TreeEvaluator::inlineStringUTF16Compress(TR::Node *node, 
 #if JAVA_SPEC_VERSION >= 21
     Inst_RegReg(OP::SUB4RegReg, node, resultReg, remainingReg, cg);
 #else
-    Inst_RegImm(OP::MOV4RegImms, node, resultReg, 0, cg);
+    Inst_RegReg(OP::XOR4RegReg, node, resultReg, resultReg, cg);
 #endif
 
     deps->stopAddingConditions();
