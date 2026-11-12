@@ -13803,16 +13803,24 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
     generateTrg1ImmInstruction(cg, TR::InstOpCode::vspltisb, node, constZeroVecReg, 0);
 
     if (!isAtLeastP10) {
-        /* Initialize maskVecReg to 0xFF00FF00FF00FF00FF00FF00FF00FF00. This is needed in the 4 and 8 element cases. */
+        /*
+         * Initialize maskVecReg to 0xFF00FF00FF00FF00FF00FF00FF00FF00. This is needed in the 4 and 8 element cases.
+         * Power 10 only needs this mask for the 1-7 elements case so the mask is created elsewhere.
+         */
         generateTrg1Src2Instruction(cg, TR::InstOpCode::vnor, node, maskVecReg, constZeroVecReg, constZeroVecReg);
         generateTrg1Src2Instruction(cg, TR::InstOpCode::vmrghb, node, maskVecReg, maskVecReg, constZeroVecReg);
     }
 
-    /* If 4-7 elements remain, first jump to load4ElementLabel to handle the first 4 elements. */
+    /*
+     * For Power 9 and earlier, If 4-7 elements remain, first jump to load4ElementLabel to handle the first 4 elements.
+     * For Power 10 and later, this branch is taken for the 1-7 elements case.
+     */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
     generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
 
     if (isAtLeastP10) {
+        /* These constants needs to be initalized a little bit earlier for Power 10. */
+
         /* Initialize tempReg to 16. This is used to store at an offset of 16. */
         generateTrg1ImmInstruction(cg, TR::InstOpCode::li, node, tempReg, 16);
 
@@ -13824,7 +13832,10 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         generateTrg1Src2Instruction(cg, TR::InstOpCode::vaddubm, node, permVecReg, permVecReg, permVecReg);
     }
 
-    /* If 8-15 elements remain, first jump to load8ElementLabel to handle the first 8 elements. */
+    /*
+     * If 8-15 elements remain, first jump to load8ElementLabel to handle the first 8 elements.
+     * For Power 10 and later, all 8-15 elements are handled instead of just 8.
+     */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 16);
     generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load8ElementLabel, cr0Reg);
 
@@ -13933,16 +13944,20 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load1ElementLabel, cr0Reg);
     }
 
-    /* If 4-7 elements remain, first jump to load4ElementLabel to handle the first 4 elements. */
+    /*
+     * For Power 9 and earlier, If 4-7 elements remain, first jump to load4ElementLabel to handle the first 4 elements.
+     * For Power 10 and later, this branch is taken for the 1-7 elements case.
+     */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
     generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
 
-    /*
-     * For JDK21+ there are instructions to locate the index of a halfword with a non-zero high byte.
-     * As a result, it needs to be branched over here to get to the code that handles loading 8 elements.
-     * This isn't needed before JDK21 so a fallthrough happens instead.
-     */
     if (isAtLeastP10) {
+        /*
+         * At this point, at least 8 input elements can be loaded from the input.
+         * A follow up lxvll instructions can extend this to 8-15 elements loaded.
+         * If all of them are Latin1 then the input is packed and stored back via stxvll.
+         * These are all the remaining elements so there is a jump to the end afterwards.
+         */
         generateLabelInstruction(cg, TR::InstOpCode::label, node, load8ElementLabel);
         generateTrg1MemInstruction(cg, TR::InstOpCode::lxvh8x, node, vec1Reg,
             TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 16));
@@ -13970,6 +13985,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         generateSrc3Instruction(cg, TR::InstOpCode::stxvll, node, vec3Reg, outputAddressReg, tempReg);
         generateLabelInstruction(cg, TR::InstOpCode::b, node, doneLabel);
     } else {
+        /*
+         * For JDK21+ there are instructions to locate the index of a halfword with a non-zero high byte.
+         * As a result, it needs to be branched over here to get to the code that handles loading 8 elements.
+         * This isn't needed before JDK21 so a fallthrough happens instead.
+         */
 #if JAVA_SPEC_VERSION >= 21
         generateLabelInstruction(cg, TR::InstOpCode::b, node, load8ElementLabel);
 #endif
@@ -14061,7 +14081,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 #endif
 
     /*
-     * The following instructions tries to load 8 halfwords from the input array.
+     * The following instructions tries to load 8 halfwords from the input array for the pre-Power 10 case.
      * The high byte of each halfword is checked to see if they are non-zero
      * If the upper byte of a halfword is non-zero, this process is abaondoned.
      * For JDK21+, the code jumps to vectorDiff8Label to locate the index of the halfword with a non-zero high byte.
@@ -14089,8 +14109,6 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
      * Power 8 Little Endian case:
      *   Unsupported
      */
-
-
     if (!isAtLeastP10) {
         generateLabelInstruction(cg, TR::InstOpCode::label, node, load8ElementLabel);
         if (isAtLeastP9) {
@@ -14144,7 +14162,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         /* There are 1-7 elements left. On Power 10, they can be handled all at once without a residue loop. */
         generateLabelInstruction(cg, TR::InstOpCode::label, node, load4ElementLabel);
 
-        /* Initialize maskVecReg to 0xFF00FF00FF00FF00FF00FF00FF00FF00. This is needed in the 4 and 8 element cases. */
+        /* Initialize maskVecReg to 0xFF00FF00FF00FF00FF00FF00FF00FF00. */
         generateTrg1Src2Instruction(cg, TR::InstOpCode::vnor, node, maskVecReg, constZeroVecReg, constZeroVecReg);
         generateTrg1Src2Instruction(cg, TR::InstOpCode::vmrghb, node, maskVecReg, maskVecReg, constZeroVecReg);
 
