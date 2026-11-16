@@ -13816,7 +13816,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
      * For Power 10 and later, this branch is taken for the 1-7 elements case.
      */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
+    if (isAtLeastP10) {
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::ble, node, load4ElementLabel, cr0Reg);
+    } else {
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
+    }
 
     if (isAtLeastP10) {
         /* These constants needs to be initalized a little bit earlier for Power 10. */
@@ -13949,7 +13953,11 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
      * For Power 10 and later, this branch is taken for the 1-7 elements case.
      */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
+    if (isAtLeastP10) {
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::ble, node, load4ElementLabel, cr0Reg);
+    } else {
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
+    }
 
     if (isAtLeastP10) {
         /*
