@@ -13953,11 +13953,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
      * For Power 10 and later, this branch is taken for the 1-7 elements case.
      */
     generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
-    if (isAtLeastP10) {
-        generateConditionalBranchInstruction(cg, TR::InstOpCode::ble, node, load4ElementLabel, cr0Reg);
-    } else {
-        generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
-    }
+    generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
 
     if (isAtLeastP10) {
         /*
@@ -14155,10 +14151,9 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         }
 
         /* 8 halfwords were compressed so subtract that from remainingReg. */
-        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -8);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addic_r, node, remainingReg, remainingReg, -8);
 
         /* If remainingReg is 0 then all elements have been compressed. Jump to the end. */
-        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
         generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
 
         /* 8 halfwords were compressed so bump up the address registers to account for this. */
@@ -14293,10 +14288,9 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         }
 
         /* 4 halfwords were compressed so subtract that from remainingReg. */
-        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -4);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addic_r, node, remainingReg, remainingReg, -4);
 
         /* If remainingReg is 0 then all elements have been compressed. Jump to the end. */
-        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
         generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
 
         /* 4 halfwords were compressed so bump up the address registers to account for this. */
@@ -14317,8 +14311,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
         generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node,
             TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 0, 1), tempReg);
-        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
-        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addic_r, node, remainingReg, remainingReg, -1);
         generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
 
         generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg,
@@ -14327,8 +14320,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
         generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node,
             TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 1, 1), tempReg);
-        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, remainingReg, remainingReg, -1);
-        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 0);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addic_r, node, remainingReg, remainingReg, -1);
         generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, cr0Reg);
 
         generateTrg1MemInstruction(cg, TR::InstOpCode::lhz, node, tempReg,
