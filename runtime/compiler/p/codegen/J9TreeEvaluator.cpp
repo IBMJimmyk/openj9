@@ -13815,10 +13815,8 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
      * For Power 9 and earlier, If 4-7 elements remain, first jump to load4ElementLabel to handle the first 4 elements.
      * For Power 10 and later, this branch is taken for the 1-7 elements case.
      */
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
-    if (isAtLeastP10) {
-        generateConditionalBranchInstruction(cg, TR::InstOpCode::ble, node, load4ElementLabel, cr0Reg);
-    } else {
+    if (!isAtLeastP10) {
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
         generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
     }
 
@@ -13952,8 +13950,10 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
      * For Power 9 and earlier, If 4-7 elements remain, first jump to load4ElementLabel to handle the first 4 elements.
      * For Power 10 and later, this branch is taken for the 1-7 elements case.
      */
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
-    generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
+    if (!isAtLeastP10) {
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 8);
+        generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load4ElementLabel, cr0Reg);
+    }
 
     if (isAtLeastP10) {
         /*
@@ -13963,20 +13963,20 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
          * These are all the remaining elements so there is a jump to the end afterwards.
          */
         generateLabelInstruction(cg, TR::InstOpCode::label, node, load8ElementLabel);
-        generateTrg1MemInstruction(cg, TR::InstOpCode::lxvh8x, node, vec1Reg,
-            TR::MemoryReference::createWithIndexReg(cg, NULL, inputAddressReg, 16));
+        generateShiftLeftImmediateLong(cg, node, tempReg, remainingReg, 57);
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::lxvll, node, vec1Reg, inputAddressReg, tempReg);
+        generateTrg1ImmInstruction(cg, TR::InstOpCode::li, node, temp2Reg, 0);
         generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, inputAddressReg, inputAddressReg, 16);
-        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, tempReg, remainingReg, -8);
-
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addic_r, node, tempReg, remainingReg, -8);
+        generateTrg1Src3Instruction(cg, TR::InstOpCode::isellt, node, tempReg, temp2Reg, tempReg, cr0Reg);
         generateShiftLeftImmediateLong(cg, node, tempReg, tempReg, 57);
         generateTrg1Src2Instruction(cg, TR::InstOpCode::lxvll, node, vec2Reg, inputAddressReg, tempReg);
         if (isLE) {
             generateTrg1ImmInstruction(cg, TR::InstOpCode::vspltish, node, vec3Reg, 8);
+            generateTrg1Src2Instruction(cg, TR::InstOpCode::vrlh, node, vec1Reg, vec1Reg, vec3Reg);
             generateTrg1Src2Instruction(cg, TR::InstOpCode::vrlh, node, vec2Reg, vec2Reg, vec3Reg);
         }
-
         generateTrg1Src3Instruction(cg, TR::InstOpCode::vperm, node, vec3Reg, vec1Reg, vec2Reg, permVecReg);
-
         generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpneb_r, node, vec3Reg, vec3Reg, constZeroVecReg);
 #if JAVA_SPEC_VERSION >= 21
         generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, vectorDiff16Label, cr6Reg);
@@ -14046,19 +14046,19 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
      * One of them is guaranteed to have a non-zero high byte so this only needs to be done once.
      * This section ends with a branch to resultLabel to calculcate the final return value.
      */
-    generateLabelInstruction(cg, TR::InstOpCode::label, node, vectorDiff8Label);
-    if (!isAtLeastP9) {
-        /* Power 8 doesn't have a vcmpneh instruction so the bits need to be flipped. */
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::vnor, node, vec2Reg, vec2Reg, vec2Reg);
-    }
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec2Reg, vec2Reg);
-    generateTrg1Src1Instruction(cg, TR::InstOpCode::vclzd, node, vec2Reg, vec2Reg);
-    generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrd, node, tempReg, vec2Reg);
-    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::sradi, node, tempReg, tempReg, 3);
-    generateTrg1Src2Instruction(cg, TR::InstOpCode::subf, node, remainingReg, tempReg, remainingReg);
-    generateLabelInstruction(cg, TR::InstOpCode::b, node, resultLabel);
-
     if (!isAtLeastP10) {
+        generateLabelInstruction(cg, TR::InstOpCode::label, node, vectorDiff8Label);
+        if (!isAtLeastP9) {
+            /* Power 8 doesn't have a vcmpneh instruction so the bits need to be flipped. */
+            generateTrg1Src2Instruction(cg, TR::InstOpCode::vnor, node, vec2Reg, vec2Reg, vec2Reg);
+        }
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec2Reg, vec2Reg);
+        generateTrg1Src1Instruction(cg, TR::InstOpCode::vclzd, node, vec2Reg, vec2Reg);
+        generateTrg1Src1Instruction(cg, TR::InstOpCode::mfvsrd, node, tempReg, vec2Reg);
+        generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::sradi, node, tempReg, tempReg, 3);
+        generateTrg1Src2Instruction(cg, TR::InstOpCode::subf, node, remainingReg, tempReg, remainingReg);
+        generateLabelInstruction(cg, TR::InstOpCode::b, node, resultLabel);
+
         /*
          * The incoming vec2Reg contains 8 halfwords. Each halfword corresponds to 1 input halfword.
          * Only the first 4 have valid data. The remaining 4 can safely be garbage.
@@ -14159,35 +14159,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         /* 8 halfwords were compressed so bump up the address registers to account for this. */
         generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, inputAddressReg, inputAddressReg, 16);
         generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, outputAddressReg, outputAddressReg, 8);
-    }
 
-    if (isAtLeastP10) {
-        /* There are 1-7 elements left. On Power 10, they can be handled all at once without a residue loop. */
-        generateLabelInstruction(cg, TR::InstOpCode::label, node, load4ElementLabel);
-
-        /* Initialize maskVecReg to 0xFF00FF00FF00FF00FF00FF00FF00FF00. */
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::vnor, node, maskVecReg, constZeroVecReg, constZeroVecReg);
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::vmrghb, node, maskVecReg, maskVecReg, constZeroVecReg);
-
-        generateShiftLeftImmediateLong(cg, node, tempReg, remainingReg, 57);
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::lxvll, node, vec1Reg, inputAddressReg, tempReg);
-        if (isLE) {
-            generateTrg1ImmInstruction(cg, TR::InstOpCode::vspltish, node, vec2Reg, 8);
-            generateTrg1Src2Instruction(cg, TR::InstOpCode::vrlh, node, vec1Reg, vec1Reg, vec2Reg);
-        }
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::vand, node, vec2Reg, vec1Reg, maskVecReg);
-
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::vcmpneh_r, node, vec2Reg, vec2Reg, constZeroVecReg);
-#if JAVA_SPEC_VERSION >= 21
-        generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, vectorDiff8Label, cr6Reg);
-#else
-        generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr6Reg);
-#endif
-
-        generateTrg1Src2Instruction(cg, TR::InstOpCode::vpkuhum, node, vec2Reg, vec1Reg, vec1Reg);
-        generateShiftLeftImmediateLong(cg, node, tempReg, remainingReg, 56);
-        generateSrc3Instruction(cg, TR::InstOpCode::stxvll, node, vec2Reg, outputAddressReg, tempReg);
-    } else {
         /* If 1-3 elements remain, jump to load1ElementLabel to handle them element by element. */
         generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, cr0Reg, remainingReg, 4);
         generateConditionalBranchInstruction(cg, TR::InstOpCode::blt, node, load1ElementLabel, cr0Reg);
@@ -14329,7 +14301,6 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
         generateConditionalBranchInstruction(cg, TR::InstOpCode::bne, node, resultLabel, cr0Reg);
         generateMemSrc1Instruction(cg, TR::InstOpCode::stb, node,
             TR::MemoryReference::createWithDisplacement(cg, outputAddressReg, 2, 1), tempReg);
-    }
 
     /*
      * For JDK21 it is possible to fallthough here without branching.
@@ -14340,6 +14311,7 @@ static TR::Register *inlineIntrinsicCompress(TR::Node *node, TR::CodeGenerator *
 #else
     generateLabelInstruction(cg, TR::InstOpCode::b, node, doneLabel);
 #endif /* JAVA_SPEC_VERSION >= 21 */
+    }
 
     /*
      * Cases where a non-Latin1 character was found jump back here.
